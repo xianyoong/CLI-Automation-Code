@@ -1,6 +1,6 @@
 # .NET SDK Test Runner
 
-A standalone application for automating .NET SDK test execution on Windows VMs. Ships as a single portable folder — no Python or Node.js required on the target machine.
+A standalone application for automating .NET SDK test execution on Windows VMs. Ships as a single portable folder, no Python or Node.js required on the target machine.
 
 ## Quick Start (End Users)
 
@@ -9,8 +9,6 @@ A standalone application for automating .NET SDK test execution on Windows VMs. 
 1. Copy the `dotnet-test-runner` folder to your VM
 2. Run `dotnet-test-runner.exe`
 3. Browser opens automatically at http://localhost:5000
-
-That's it — no Python, Node.js, or other runtimes needed.
 
 ## Usage
 
@@ -95,7 +93,7 @@ tests:
 1. Click "+ Add Test" in the nav bar
 2. Fill in category and title (ID is auto-generated from the title)
 3. Define steps as JSON array
-4. Save — the test appears in the test list immediately
+4. Save, the test appears in the test list immediately
 5. Custom tests can be deleted via the Delete button
 
 ## Architecture
