@@ -1,0 +1,124 @@
+tests:
+- id: fs-08-solution-class-libraries
+  category: F#
+  title: 8. F# solution with class library references
+  description: Create an F# solution with console and class library references
+  steps:
+  - type: command
+    command: dotnet new sln -o f1
+  - type: command
+    command: cd f1
+  - type: command
+    command: dotnet new console -o a -lang f#
+  - type: command
+    command: dotnet new classlib -o b -lang f#
+  - type: command
+    command: dotnet new classlib -o c -lang f# -f netstandard2.1
+  - type: command
+    command: dotnet sln add a/a.fsproj
+  - type: command
+    command: dotnet sln add b/b.fsproj
+  - type: command
+    command: dotnet sln add c/c.fsproj
+  - type: command
+    command: cd b
+  - type: command
+    command: dotnet add reference ../c/c.fsproj
+  - type: command
+    command: cd ../a
+  - type: command
+    command: dotnet add reference ../b/b.fsproj
+  - type: command
+    command: cd ..
+  - type: write_file
+    path: a/Program.fs
+    content: 'printfn "Hello from F#"
+
+      lib1.Say1.hello "Kevin"
+
+      '
+  - type: write_file
+    path: b/Library.fs
+    content: "namespace lib1\nopen lib2\nmodule Say1 =\n    let hello name = Say2.hello\
+      \ name\n"
+  - type: write_file
+    path: c/Library.fs
+    content: "namespace lib2\nmodule Say2 =\n    let hello name = printfn \"Hello\
+      \ %s\" name\n"
+  - type: command
+    command: cd a
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  sort_order: 10
+- id: fs-09-web-mvc-webapi-build
+  category: F#
+  title: 9. F# web/mvc/webapi apps
+  description: Create F# web, MVC, and WebAPI apps and build them
+  steps:
+  - type: command
+    command: dotnet new web -o myweb2 -lang f#
+  - type: command
+    command: cd myweb2
+  - type: command
+    command: dotnet build
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new mvc -n mymvc2 -lang f#
+  - type: command
+    command: cd mymvc2
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new webapi -o mywebapi2 -lang f#
+  - type: command
+    command: cd mywebapi2
+  - type: command
+    command: dotnet build
+  sort_order: 11
+- id: fs-10-xunit-nunit-mstest
+  category: F#
+  title: 10. F# xUnit/NUnit/MSTest
+  description: Create F# test projects for xUnit, NUnit, and MSTest
+  steps:
+  - type: command
+    command: dotnet new xunit -n Myxunit2 -lang f#
+  - type: command
+    command: cd Myxunit2
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new nunit -n Mynunit2 -lang f#
+  - type: command
+    command: cd Mynunit2
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new mstest -n Mymstest2 -lang f#
+  - type: command
+    command: cd Mymstest2
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+  sort_order: 12

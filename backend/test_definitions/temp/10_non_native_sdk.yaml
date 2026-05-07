@@ -1,0 +1,111 @@
+tests:
+- id: nonnative-sdk-x86-basic
+  category: Non-native SDK
+  title: Non-native SDK tests (x86 on x64, etc.)
+  description: Exercise console, desktop, and test templates under a non-native SDK
+    scenario
+  steps:
+  - type: command
+    command: dotnet --info
+  - type: command
+    command: dotnet new console -o test
+  - type: command
+    command: cd test
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new wpf -o mywpf
+  - type: command
+    command: cd mywpf
+  - type: command
+    command: dotnet build
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new winforms -o mywinforms
+  - type: command
+    command: cd mywinforms
+  - type: command
+    command: dotnet build
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new xunit -o Myxunit
+  - type: command
+    command: cd Myxunit
+  - type: write_file
+    path: UnitTest1.cs
+    content: "namespace Myxunit;\n\npublic class UnitTest1\n{\n    [Fact]\n    public\
+      \ void TestPass()\n    {\n        Assert.True(true);\n    }\n\n    [Fact]\n\
+      \    public void TestFail()\n    {\n        Assert.True(false);\n    }\n\n \
+      \   [Fact(Skip = \"Skipping this test for now\")]\n    public void TestSkip()\n\
+      \    {\n        Assert.True(true);\n    }\n}\n"
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet test
+    expected_exit_code: 1
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new nunit -o Myunit
+  - type: command
+    command: cd Myunit
+  - type: write_file
+    path: UnitTest1.cs
+    content: "namespace Mynunit\n{\n    public class Tests\n    {\n        [SetUp]\n\
+      \        public void Setup()\n        {\n        }\n\n        [Test]\n     \
+      \   public void Test_Pass()\n        {\n            Assert.Pass(\"This test\
+      \ passed\");\n        }\n\n        [Test]\n        public void Test_Fail()\n\
+      \        {\n            Assert.Fail(\"This test failed\");\n        }\n\n  \
+      \      [Test]\n        [Ignore(\"This test is skipped\")]\n        public void\
+      \ Test_Skip()\n        {\n            Assert.Pass(\"This test is skipped\");\n\
+      \        }\n    }\n}\n"
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet test
+    expected_exit_code: 1
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new mstest -o Mymstest
+  - type: command
+    command: cd Mymstest
+  - type: write_file
+    path: Test1.cs
+    content: "namespace Mymstest;\n\n[TestClass]\npublic sealed class Test1\n{\n \
+      \   [TestMethod]\n    public void TestMethod1()\n    {\n        Assert.AreEqual(11,\
+      \ 11);\n    }\n\n    [TestMethod]\n    public void TestMethod2()\n    {\n  \
+      \      Assert.AreEqual(12, 11);\n    }\n\n    [TestMethod]\n    public void\
+      \ TestMethod3()\n    {\n        Assert.Inconclusive();\n    }\n}\n"
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet test
+    expected_exit_code: 1
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new console -o f -lang f#
+  - type: command
+    command: cd f
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new console -o vb -lang vb
+  - type: command
+    command: cd vb
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  sort_order: 29

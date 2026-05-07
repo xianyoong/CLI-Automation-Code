@@ -1,0 +1,74 @@
+tests:
+- id: cs-05a-xunit-failing-suite
+  category: C# Testing
+  title: 5a. xUnit
+  description: Create an xUnit project with passing, failing, and skipped tests
+  steps:
+  - type: command
+    command: dotnet new xunit -n x
+  - type: command
+    command: cd x
+  - type: write_file
+    path: UnitTest1.cs
+    content: "namespace Myxunit;\n\npublic class UnitTest1\n{\n    [Fact]\n    public\
+      \ void TestPass()\n    {\n        Assert.True(true);\n    }\n\n    [Fact]\n\
+      \    public void TestFail()\n    {\n        Assert.True(false);\n    }\n\n \
+      \   [Fact(Skip = \"Skipping this test for now\")]\n    public void TestSkip()\n\
+      \    {\n        Assert.True(true);\n    }\n}\n"
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+    expected_exit_code: 1
+  sort_order: 5
+- id: cs-05b-nunit-failing-suite
+  category: C# Testing
+  title: 5b. NUnit
+  description: Create an NUnit project with passing, failing, and skipped tests
+  steps:
+  - type: command
+    command: dotnet new nunit -n n
+  - type: command
+    command: cd n
+  - type: write_file
+    path: UnitTest1.cs
+    content: "namespace Mynunit\n{\n    public class Tests\n    {\n        [SetUp]\n\
+      \        public void Setup()\n        {\n        }\n\n        [Test]\n     \
+      \   public void Test_Pass()\n        {\n            Assert.Pass(\"This test\
+      \ passed\");\n        }\n\n        [Test]\n        public void Test_Fail()\n\
+      \        {\n            Assert.Fail(\"This test failed\");\n        }\n\n  \
+      \      [Test]\n        [Ignore(\"This test is skipped\")]\n        public void\
+      \ Test_Skip()\n        {\n            Assert.Pass(\"This test is skipped\");\n\
+      \        }\n    }\n}\n"
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+    expected_exit_code: 1
+  sort_order: 6
+- id: cs-05c-mstest-failing-suite
+  category: C# Testing
+  title: 5c. MSTest
+  description: Create an MSTest project with passing, failing, and inconclusive tests
+  steps:
+  - type: command
+    command: dotnet new mstest -n m
+  - type: command
+    command: cd m
+  - type: write_file
+    path: Test1.cs
+    content: "namespace Mymstest;\n\n[TestClass]\npublic sealed class Test1\n{\n \
+      \   [TestMethod]\n    public void TestMethod1()\n    {\n        Assert.AreEqual(12,\
+      \ 11);\n    }\n\n    [TestMethod]\n    public void TestMethod2()\n    {\n  \
+      \      Assert.AreEqual(11, 11);\n    }\n\n    [TestMethod]\n    public void\
+      \ TestMethod3()\n    {\n        Assert.Inconclusive();\n    }\n}\n"
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+    expected_exit_code: 1
+  sort_order: 7

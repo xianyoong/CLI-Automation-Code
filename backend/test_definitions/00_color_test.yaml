@@ -1,0 +1,32 @@
+tests:
+  - id: color-test-demo
+    category: "Demo"
+    title: "Color Output Test"
+    description: "Tests that ANSI colors render correctly in the log viewer"
+    machine_mutating: false
+    sort_order: 0
+    steps:
+      - type: command
+        command: "echo -e '\\033[32m✓ GREEN - Success message\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "echo -e '\\033[31m✗ RED - Error message\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "echo -e '\\033[33m⚠ YELLOW - Warning message\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "echo -e '\\033[34mℹ BLUE - Info message\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "echo -e '\\033[35m♦ MAGENTA - Debug message\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "echo -e '\\033[36m● CYAN - Highlight message\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "echo -e '\\033[1;32mBOLD GREEN\\033[0m and \\033[1;31mBOLD RED\\033[0m'"
+        timeout: 10
+      - type: command
+        command: "dotnet --version"
+        timeout: 30

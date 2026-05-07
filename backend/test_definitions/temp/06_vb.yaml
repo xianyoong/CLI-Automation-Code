@@ -1,0 +1,95 @@
+tests:
+- id: vb-11-console-class-libraries
+  category: VB
+  title: 11. VB console app with class library references
+  description: Create a VB console app with referenced class libraries
+  steps:
+  - type: command
+    command: dotnet new sln -o s2
+  - type: command
+    command: cd s2
+  - type: command
+    command: dotnet new console -o e -lang vb
+  - type: command
+    command: dotnet new classlib -o b -lang vb
+  - type: command
+    command: dotnet new classlib -o c -lang vb -f netstandard2.1
+  - type: command
+    command: dotnet sln add e/e.vbproj
+  - type: command
+    command: dotnet sln add b/b.vbproj
+  - type: command
+    command: dotnet sln add c/c.vbproj
+  - type: command
+    command: cd b
+  - type: command
+    command: dotnet add reference ../c/c.vbproj
+  - type: command
+    command: cd ../e
+  - type: command
+    command: dotnet add reference ../b/b.vbproj
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  sort_order: 13
+- id: vb-12-xunit-nunit-mstest
+  category: VB
+  title: 12. VB xUnit/NUnit/MSTest
+  description: Create VB test projects for xUnit, NUnit, and MSTest
+  steps:
+  - type: command
+    command: dotnet new xunit -n Myxunit3 -lang vb
+  - type: command
+    command: cd Myxunit3
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new nunit -n Mynunit3 -lang vb
+  - type: command
+    command: cd Mynunit3
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new mstest -n Mymstest3 -lang vb
+  - type: command
+    command: cd Mymstest3
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: dotnet test
+  sort_order: 14
+- id: vb-13-winforms-wpf-build
+  category: VB
+  title: 13. VB WinForms/WPF
+  description: Create VB WPF and WinForms apps and build them
+  steps:
+  - type: command
+    command: dotnet new wpf -o mywpf1 -lang vb
+  - type: command
+    command: cd mywpf1
+  - type: command
+    command: dotnet build
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new winforms -o w1 -lang vb
+  - type: command
+    command: cd w1
+  - type: command
+    command: dotnet build
+  sort_order: 15

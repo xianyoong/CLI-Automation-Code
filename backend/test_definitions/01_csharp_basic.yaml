@@ -1,0 +1,85 @@
+tests:
+- id: cs-01-dotnet-info
+  category: C# Basic
+  title: 1. Check dotnet info
+  description: Verify dotnet SDK is installed and show version info
+  steps:
+  - type: command
+    command: dotnet --info
+  sort_order: 1
+- id: cs-02-console-build-run-publish
+  category: C# Basic
+  title: 2. Create C# console app, build, run, publish
+  description: Create a new C# console application, build it, run it, and publish
+    it
+  steps:
+  - type: command
+    command: dotnet new console -o c1
+  - type: command
+    command: cd c1
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+    assert_output_contains:
+    - Hello, World!
+  - type: command
+    command: dotnet publish
+  sort_order: 2
+- id: cs-03-solution-class-libraries
+  category: C# Basic
+  title: 3. Solution with console + class libraries (.NET & .NET Standard)
+  description: Create a solution with a console app referencing .NET and .NET Standard
+    class libraries
+  steps:
+  - type: command
+    command: dotnet new sln -o s1
+  - type: command
+    command: cd s1
+  - type: command
+    command: dotnet new console -o a
+  - type: command
+    command: dotnet new classlib -o b -f netstandard2.1
+  - type: command
+    command: dotnet new classlib -o c
+  - type: command
+    command: dotnet sln add a/a.csproj
+  - type: command
+    command: dotnet sln add b/b.csproj
+  - type: command
+    command: dotnet sln add c/c.csproj
+  - type: command
+    command: cd a
+  - type: command
+    command: dotnet add reference ../b/b.csproj
+  - type: command
+    command: dotnet add reference ../c/c.csproj
+  - type: command
+    command: cd ..
+  - type: write_file
+    path: a/Program.cs
+    content: "using System;\nusing b;\nusing c;\nnamespace a\n{\n    class Program\n\
+      \    {\n        static void Main(string[] args)\n        {\n            Console.WriteLine(\"\
+      Hello World!\");\n            Console.WriteLine(Class1.OT());\n            Console.WriteLine(Class2.OT());\n\
+      \        }\n    }\n}\n"
+  - type: write_file
+    path: b/Class1.cs
+    content: "using System;\nnamespace b\n{\n    public class Class1\n    {\n    \
+      \    public static string OT()\n        {\n            return \"Hi all 2.1 \"\
+      ;\n        }\n    }\n}\n"
+  - type: write_file
+    path: c/Class1.cs
+    content: "using System;\nnamespace c\n{\n    public class Class2\n    {\n    \
+      \    public static string OT()\n        {\n            return \"Hi all 8.0 \"\
+      ;\n        }\n    }\n}\n"
+  - type: command
+    command: cd a
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+    assert_output_contains:
+    - Hello World!
+    - Hi all 2.1
+    - Hi all 8.0
+  sort_order: 3

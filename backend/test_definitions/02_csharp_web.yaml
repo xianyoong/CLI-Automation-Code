@@ -1,0 +1,32 @@
+tests:
+- id: cs-04-web-mvc-webapi-build
+  category: C# Web
+  title: 4. Create C# web/mvc/webapi apps, build
+  description: Create C# web, MVC, and WebAPI apps and build them without starting
+    servers
+  steps:
+  - type: command
+    command: dotnet new web -o myweb
+  - type: command
+    command: cd myweb
+  - type: command
+    command: dotnet build
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new mvc -n mymvc
+  - type: command
+    command: cd mymvc
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet restore
+  - type: command
+    command: cd ..
+  - type: command
+    command: dotnet new webapi -o mywebapi
+  - type: command
+    command: cd mywebapi
+  - type: command
+    command: dotnet build
+  sort_order: 4

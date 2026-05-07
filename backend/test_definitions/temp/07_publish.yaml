@@ -1,0 +1,36 @@
+tests:
+- id: publish-15-framework-dependent
+  category: Publish
+  title: 15. Framework-dependent publish
+  description: Create a console app, build it, run it, and publish it for net10.0
+  steps:
+  - type: command
+    command: dotnet new console -o f3
+  - type: command
+    command: cd f3
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  - type: command
+    command: dotnet publish -f net10.0
+  sort_order: 16
+- id: publish-16-self-contained
+  category: Publish
+  title: 16. Self-contained publish
+  description: Create a console app, build it, run it, and publish self-contained
+    for multiple RIDs
+  steps:
+  - type: command
+    command: dotnet new console -o f4
+  - type: command
+    command: cd f4
+  - type: command
+    command: dotnet build
+  - type: command
+    command: dotnet run
+  - type: command
+    command: dotnet publish -r win-x64 --sc
+  - type: command
+    command: dotnet publish -r win-arm64 --sc
+  sort_order: 17
