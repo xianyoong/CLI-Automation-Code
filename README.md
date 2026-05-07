@@ -2,17 +2,6 @@
 
 A standalone application for automating .NET SDK test execution on Windows VMs. Ships as a single portable folder — no Python or Node.js required on the target machine.
 
-## Features
-
-- **Pre-built test suite** covering all .NET SDK scenarios (C#, F#, VB, Web, Testing, Publishing, Workloads)
-- **Real-time log streaming** with ANSI color support
-- **Click-to-scroll** — click a test in the progress list to jump to its output
-- **Add/edit/delete custom test cases** via the UI (auto-generated IDs)
-- **Pass/fail/skip tracking** with summary dashboard
-- **Run history** stored in local SQLite database
-- **Machine-mutating test warnings** (workload installs, etc.)
-- **Standalone executable** — no runtime dependencies needed on target VMs
-
 ## Quick Start (End Users)
 
 **Requirements:** Windows 10/11 (x64) + .NET SDK installed
