@@ -10,11 +10,29 @@ tests:
     command: cd x
   - type: write_file
     path: UnitTest1.cs
-    content: "namespace Myxunit;\n\npublic class UnitTest1\n{\n    [Fact]\n    public\
-      \ void TestPass()\n    {\n        Assert.True(true);\n    }\n\n    [Fact]\n\
-      \    public void TestFail()\n    {\n        Assert.True(false);\n    }\n\n \
-      \   [Fact(Skip = \"Skipping this test for now\")]\n    public void TestSkip()\n\
-      \    {\n        Assert.True(true);\n    }\n}\n"
+    content: |
+      namespace Myxunit;
+      
+      public class UnitTest1
+      {
+          [Fact]
+          public void TestPass()
+          {
+              Assert.True(true);
+          }
+      
+          [Fact]
+          public void TestFail()
+          {
+              Assert.True(false);
+          }
+      
+          [Fact(Skip = "Skipping this test for now")]
+          public void TestSkip()
+          {
+              Assert.True(true);
+          }
+      }
   - type: command
     command: dotnet build
   - type: command
@@ -34,14 +52,36 @@ tests:
     command: cd n
   - type: write_file
     path: UnitTest1.cs
-    content: "namespace Mynunit\n{\n    public class Tests\n    {\n        [SetUp]\n\
-      \        public void Setup()\n        {\n        }\n\n        [Test]\n     \
-      \   public void Test_Pass()\n        {\n            Assert.Pass(\"This test\
-      \ passed\");\n        }\n\n        [Test]\n        public void Test_Fail()\n\
-      \        {\n            Assert.Fail(\"This test failed\");\n        }\n\n  \
-      \      [Test]\n        [Ignore(\"This test is skipped\")]\n        public void\
-      \ Test_Skip()\n        {\n            Assert.Pass(\"This test is skipped\");\n\
-      \        }\n    }\n}\n"
+    content: |
+      namespace Mynunit
+      {
+          public class Tests
+          {
+              [SetUp]
+              public void Setup()
+              {
+              }
+
+              [Test]
+              public void Test_Pass()
+              {
+                  Assert.Pass("This test passed");
+              }
+
+              [Test]
+              public void Test_Fail()
+              {
+                  Assert.Fail("This test failed");
+              }
+
+              [Test]
+              [Ignore("This test is skipped")]
+              public void Test_Skip()
+              {
+                  Assert.Pass("This test is skipped");
+              }
+          }
+      }
   - type: command
     command: dotnet build
   - type: command
@@ -61,11 +101,30 @@ tests:
     command: cd m
   - type: write_file
     path: Test1.cs
-    content: "namespace Mymstest;\n\n[TestClass]\npublic sealed class Test1\n{\n \
-      \   [TestMethod]\n    public void TestMethod1()\n    {\n        Assert.AreEqual(12,\
-      \ 11);\n    }\n\n    [TestMethod]\n    public void TestMethod2()\n    {\n  \
-      \      Assert.AreEqual(11, 11);\n    }\n\n    [TestMethod]\n    public void\
-      \ TestMethod3()\n    {\n        Assert.Inconclusive();\n    }\n}\n"
+    content: |
+      namespace Mymstest;
+      
+      [TestClass]
+      public sealed class Test1
+      {
+          [TestMethod]
+          public void TestMethod1()
+          {
+              Assert.AreEqual(12, 11);
+          }
+      
+          [TestMethod]
+          public void TestMethod2()
+          {
+              Assert.AreEqual(11, 11);
+          }
+      
+          [TestMethod]
+          public void TestMethod3()
+          {
+              Assert.Inconclusive();
+          }
+      }
   - type: command
     command: dotnet restore
   - type: command

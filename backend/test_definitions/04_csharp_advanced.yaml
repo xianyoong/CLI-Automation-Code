@@ -2,8 +2,7 @@ tests:
 - id: cs-06-multi-tfm-console
   category: C# Advanced
   title: 6. Multi-TFM console app
-  description: Create a C# console app targeting net10.0 and net48, then build and
-    run both
+  description: Create a C# console app targeting net10.0 and net48, then build and run both
   steps:
   - type: command
     command: dotnet new console -o f2
@@ -11,17 +10,21 @@ tests:
     command: cd f2
   - type: write_file
     path: f2.csproj
-    content: "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n\
-      \    <TargetFrameworks>net10.0;net48</TargetFrameworks>\n    <ImplicitUsings>disable</ImplicitUsings>\n\
-      \    <Nullable>enable</Nullable>\n    <LangVersion>latest</LangVersion>\n  </PropertyGroup>\n\
-      </Project>\n"
+    content: |
+      <Project Sdk="Microsoft.NET.Sdk">
+        <PropertyGroup>
+          <OutputType>Exe</OutputType>
+          <TargetFrameworks>net10.0;net48</TargetFrameworks>
+          <ImplicitUsings>disable</ImplicitUsings>
+          <Nullable>enable</Nullable>
+          <LangVersion>latest</LangVersion>
+        </PropertyGroup>
+      </Project>
   - type: write_file
     path: Program.cs
-    content: 'using System;
-
+    content: |
+      using System;
       Console.WriteLine("Hello, World!");
-
-      '
   - type: command
     command: dotnet build
   - type: command

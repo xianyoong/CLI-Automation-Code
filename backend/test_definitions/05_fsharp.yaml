@@ -32,19 +32,22 @@ tests:
     command: cd ..
   - type: write_file
     path: a/Program.fs
-    content: 'printfn "Hello from F#"
-
+    content: |
+      printfn "Hello from F#"
       lib1.Say1.hello "Kevin"
-
-      '
   - type: write_file
     path: b/Library.fs
-    content: "namespace lib1\nopen lib2\nmodule Say1 =\n    let hello name = Say2.hello\
-      \ name\n"
+    content: |
+      namespace lib1
+      open lib2
+      module Say1 =
+          let hello name = Say2.hello name
   - type: write_file
     path: c/Library.fs
-    content: "namespace lib2\nmodule Say2 =\n    let hello name = printfn \"Hello\
-      \ %s\" name\n"
+    content: |
+      namespace lib2
+      module Say2 =
+          let hello name = printfn "Hello %s" name
   - type: command
     command: cd a
   - type: command

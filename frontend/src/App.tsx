@@ -247,7 +247,7 @@ export default function App() {
             <button className={view === 'dashboard' ? 'active' : ''} onClick={() => setView('dashboard')}>Dashboard</button>
             <button className={view === 'tests' ? 'active' : ''} onClick={() => setView('tests')}>Tests</button>
             <button className={view === 'running' ? 'active' : ''} onClick={() => setView('running')}>Runner</button>
-            <button onClick={() => { setEditingTest(null); setView('editor'); }}>+ Add Test</button>
+            <button className={view === 'editor' ? 'active' : ''} onClick={() => { setEditingTest(null); setView('editor'); }}>+ Add Test</button>
           </nav>
         </div>
         {sdkInfo !== null ? (
