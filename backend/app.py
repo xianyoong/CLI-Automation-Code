@@ -29,6 +29,7 @@ BASE_DIR = get_base_dir()
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
+app.json.sort_keys = False
 CORS(app)
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_runner.db")
