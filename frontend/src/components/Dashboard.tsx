@@ -20,15 +20,20 @@ function formatTime(iso: string | null): string {
   }
 }
 
-function SummaryBadges({ summary }: { summary: string | null }) {
+function SummaryBar({ summary }: { summary: string | null }) {
   if (!summary) return <span>-</span>;
   try {
     const data = JSON.parse(summary);
+    const total = data.passed + data.failed + data.skipped;
+    if (total === 0) return <span>-</span>;
+    const pct = Math.round((data.passed / total) * 100);
+    const color = pct === 100 ? '#28a745' : pct >= 50 ? '#ffc107' : '#dc3545';
     return (
-      <div className="summary-badges">
-        {data.passed > 0 && <span className="summary-badge badge-passed">{data.passed} passed</span>}
-        {data.failed > 0 && <span className="summary-badge badge-failed">{data.failed} failed</span>}
-        {data.skipped > 0 && <span className="summary-badge badge-skipped">{data.skipped} skipped</span>}
+      <div className="summary-bar-container">
+        <div className="summary-bar-track">
+          <div className="summary-bar-fill" style={{ width: `${pct}%`, background: color }} />
+        </div>
+        <span className="summary-bar-label">{pct}%</span>
       </div>
     );
   } catch {
@@ -62,7 +67,7 @@ export default function Dashboard({ runs, onViewRun, onRetryRun, isRunning }: Da
                   <td>{formatTime(run.started_at)}</td>
                   <td>{totalTests}</td>
                   <td><span className={`badge badge-${run.status}`}>{run.status}</span></td>
-                  <td><SummaryBadges summary={run.summary} /></td>
+                  <td><SummaryBar summary={run.summary} /></td>
                   <td className="actions-cell" onClick={e => e.stopPropagation()}>
                     <button
                       className="retry-btn"
