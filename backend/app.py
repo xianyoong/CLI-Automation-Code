@@ -305,15 +305,34 @@ def stream_execution(run_id):
     return Response(generate(), mimetype="text/event-stream")
 
 
+def _refresh_path():
+    """Refresh PATH from the registry so newly installed tools are found."""
+    import os
+    machine_path = os.environ.get("PATH", "")
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment") as key:
+            machine_path = winreg.QueryValueEx(key, "Path")[0]
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+            user_path = winreg.QueryValueEx(key, "Path")[0]
+        os.environ["PATH"] = machine_path + ";" + user_path
+    except Exception:
+        pass
+
+
 @app.route("/api/environment", methods=["GET"])
 def get_environment():
     """Get current dotnet environment info."""
     import subprocess
+    _refresh_path()
     try:
         result = subprocess.run(
             ["dotnet", "--info"], capture_output=True, text=True, timeout=30
         )
-        return jsonify({"output": result.stdout, "exit_code": result.returncode})
+        # Return stdout even on non-zero exit code; preview SDKs may return
+        # non-zero while still printing valid info.
+        output = result.stdout or result.stderr
+        return jsonify({"output": output, "exit_code": 0 if result.stdout.strip() else result.returncode})
     except FileNotFoundError:
         return jsonify({"output": "dotnet not found in PATH", "exit_code": -1})
     except Exception as e:
@@ -324,14 +343,18 @@ def get_environment():
 def list_sdks():
     """List all installed .NET SDKs."""
     import subprocess
+    _refresh_path()
     try:
         result = subprocess.run(
             ["dotnet", "--list-sdks"], capture_output=True, text=True, timeout=30
         )
-        if result.returncode != 0:
-            return jsonify({"sdks": [], "error": result.stderr})
+        # Parse stdout even on non-zero exit code; preview SDKs may return
+        # non-zero while still printing valid SDK list.
         sdks = []
-        for line in result.stdout.strip().splitlines():
+        output = result.stdout.strip()
+        if not output and result.returncode != 0:
+            return jsonify({"sdks": [], "error": result.stderr})
+        for line in output.splitlines():
             # Format: "8.0.100 [C:\Program Files\dotnet\sdk]"
             parts = line.split(" [")
             if parts:
