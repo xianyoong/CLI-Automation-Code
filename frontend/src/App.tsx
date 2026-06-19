@@ -35,10 +35,12 @@ export default function App() {
     setSdkLoading(true);
     try {
       const [env, sdkData] = await Promise.all([fetchEnvironment(), fetchSdks()]);
-      setSdkInfo(env.exit_code === 0 ? env.output : null);
-      setSdkList(sdkData.sdks || []);
-      if (sdkData.sdks?.length > 0) {
-        setSelectedSdk(prev => prev || sdkData.sdks[sdkData.sdks.length - 1].version);
+      const sdks = sdkData.sdks || [];
+      setSdkList(sdks);
+      // Only consider SDK "found" if dotnet --info succeeds AND at least one SDK is installed
+      setSdkInfo(env.exit_code === 0 && sdks.length > 0 ? env.output : null);
+      if (sdks.length > 0) {
+        setSelectedSdk(prev => prev || sdks[sdks.length - 1].version);
       }
     } finally {
       setSdkLoading(false);
@@ -250,7 +252,7 @@ export default function App() {
             <button className={view === 'editor' ? 'active' : ''} onClick={() => { setEditingTest(null); setView('editor'); }}>+ Add Test</button>
           </nav>
         </div>
-        {sdkInfo !== null ? (
+        {(sdkInfo !== null || sdkList.length > 0) ? (
           <div className="sdk-banner sdk-found">
             <span className="sdk-icon">✓</span>
             {sdkList.length > 1 ? (
@@ -266,17 +268,17 @@ export default function App() {
                   ))}
                 </select>
                 {(() => {
-                  const osMatch = sdkInfo.match(/OS Name:\s+(.+)/);
-                  const ridMatch = sdkInfo.match(/RID:\s+(\S+)/);
+                  const osMatch = sdkInfo?.match(/OS Name:\s+(.+)/);
+                  const ridMatch = sdkInfo?.match(/RID:\s+(\S+)/);
                   return ` | ${osMatch?.[1]?.trim() || 'unknown OS'} | ${ridMatch?.[1] || ''}`;
                 })()}
               </span>
             ) : (
               <span className="sdk-text">
                 {(() => {
-                  const versionMatch = sdkInfo.match(/Version:\s+(\S+)/);
-                  const osMatch = sdkInfo.match(/OS Name:\s+(.+)/);
-                  const ridMatch = sdkInfo.match(/RID:\s+(\S+)/);
+                  const versionMatch = sdkInfo?.match(/Version:\s+(\S+)/);
+                  const osMatch = sdkInfo?.match(/OS Name:\s+(.+)/);
+                  const ridMatch = sdkInfo?.match(/RID:\s+(\S+)/);
                   return `SDK ${versionMatch?.[1] || 'unknown'} | ${osMatch?.[1]?.trim() || 'unknown OS'} | ${ridMatch?.[1] || ''}`;
                 })()}
               </span>
