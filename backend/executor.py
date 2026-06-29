@@ -332,6 +332,7 @@ class TestExecutor:
                 cmd = step["command"]
                 # Handle cd commands by updating current_dir
                 if cmd.strip().startswith("cd "):
+                    prev_dir = current_dir
                     target = cmd.strip()[3:].strip()
                     if os.path.isabs(target):
                         current_dir = target
@@ -355,8 +356,9 @@ class TestExecutor:
                         "step_index": idx,
                         "line": f"$ {cmd}\n  → {current_dir}",
                     })
-                    # Send cd to console
+                    # Send cd to console, echoing the prompt at the dir BEFORE cd so it matches a manual run
                     cd_cmd = f"cd /d {current_dir}" if sys.platform == "win32" else f"cd {current_dir}"
+                    self._queue_console_cmd(run_id, f"echo {prev_dir}^> {cmd}" if sys.platform == "win32" else f"echo '{prev_dir}$ {cmd}'")
                     self._queue_console_cmd(run_id, cd_cmd)
                     continue
 
