@@ -12,6 +12,67 @@ from queue import Queue, Empty
 from typing import Dict, List, Any, Generator
 
 
+def _render_terminal_output(text: str) -> str:
+    """Collapse a terminal-logger animation stream into the final rendered
+    screen a real console would show, preserving SGR colors.
+
+    The .NET SDK's modern terminal logger (forced on via MSBUILDTERMINALLOGGER)
+    emits cursor-movement escapes to animate progress in place. Captured to a
+    file those frames just pile up, so we replay them through a VT emulator and
+    read back the final screen.
+
+    ponytail: only kicks in when cursor-control escapes are present (the
+    telltale `\\x1b[?25` show/hide-cursor codes the logger always emits), so
+    plain command output passes through untouched and never gets reflowed or
+    truncated to the emulator width.
+    """
+    if "\x1b[?25" not in text:
+        return text
+    try:
+        import pyte
+    except ImportError:
+        return text
+
+    named = {"black": 0, "red": 1, "green": 2, "brown": 3,
+             "blue": 4, "magenta": 5, "cyan": 6, "white": 7}
+
+    def sgr(char) -> str:
+        parts = []
+        if char.bold:
+            parts.append("1")
+        if char.fg != "default":
+            parts.append(str(30 + named.get(char.fg, 9)))
+        if char.bg != "default":
+            parts.append(str(40 + named.get(char.bg, 9)))
+        return ";".join(parts)
+
+    def render_line(buf) -> str:
+        cols = (max(buf) + 1) if buf else 0
+        out, prev = "", ""
+        for col in range(cols):
+            char = buf[col]
+            code = sgr(char)
+            if code != prev:
+                out += "\x1b[0m" + (f"\x1b[{code}m" if code else "")
+                prev = code
+            out += char.data
+        if prev:
+            out += "\x1b[0m"
+        return out.rstrip()
+
+    screen = pyte.HistoryScreen(200, 50, history=5000)
+    # ponytail: Windows consoles treat LF as CR+LF (move to column 0); pyte
+    # defaults to Unix bare LF, which mangles cursor-repositioned output. LNM
+    # matches the real console the app is imitating.
+    screen.set_mode(pyte.modes.LNM)
+    pyte.Stream(screen).feed(text)
+    rows = list(screen.history.top) + [screen.buffer[i] for i in range(screen.lines)]
+    lines = [render_line(buf) for buf in rows]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
 def _get_db_path():
     if getattr(sys, '_MEIPASS', None):
         return os.path.join(os.path.dirname(sys.executable), "test_runner.db")
@@ -78,13 +139,14 @@ class TestExecutor:
                 script_path = os.path.join(console_dir, "runner.bat")
                 exec_file = os.path.join(console_dir, "exec.bat")
                 with open(script_path, "w", encoding="utf-8") as f:
-                    f.write(f"@echo off\n")
+                    f.write("@echo off\n")
+                    f.write("%SystemRoot%\\System32\\chcp.com 65001 >nul\n")  # ponytail: full path; PATH may lack System32 in the spawned console
                     f.write(f"title .NET Test Runner - Run {run_id}\n")
-                    f.write(f"echo ========================================\n")
-                    f.write(f"echo   .NET SDK Test Runner - Live Console\n")
-                    f.write(f"echo ========================================\n")
-                    f.write(f"echo.\n")
-                    f.write(f":loop\n")
+                    f.write("echo ========================================\n")
+                    f.write("echo   .NET SDK Test Runner - Live Console\n")
+                    f.write("echo ========================================\n")
+                    f.write("echo.\n")
+                    f.write(":loop\n")
                     f.write(f'if exist "{done_file}" goto end\n')
                     # Check if commands file has content (size > 0)
                     f.write(f'for %%A in ("{cmd_file}") do if %%~zA==0 goto wait\n')
@@ -93,15 +155,15 @@ class TestExecutor:
                     f.write(f'type nul > "{cmd_file}"\n')
                     # Execute the commands
                     f.write(f'call "{exec_file}"\n')
-                    f.write(f":wait\n")
-                    f.write(f"timeout /t 1 /nobreak >nul 2>&1\n")
-                    f.write(f"goto loop\n")
-                    f.write(f":end\n")
-                    f.write(f"echo.\n")
-                    f.write(f"echo ========================================\n")
-                    f.write(f"echo   Run complete. You may close this window.\n")
-                    f.write(f"echo ========================================\n")
-                    f.write(f"pause\n")
+                    f.write(":wait\n")
+                    f.write("timeout /t 1 /nobreak >nul 2>&1\n")
+                    f.write("goto loop\n")
+                    f.write(":end\n")
+                    f.write("echo.\n")
+                    f.write("echo ========================================\n")
+                    f.write("echo   Run complete. You may close this window.\n")
+                    f.write("echo ========================================\n")
+                    f.write("pause\n")
 
                 # Launch the batch script in a new console window
                 subprocess.Popen(
@@ -267,8 +329,16 @@ class TestExecutor:
 
             # Send test header to console with spacing
             blank = "echo." if sys.platform == "win32" else "echo"
+            title = test["title"]
+            if sys.platform == "win32":
+                # Title is arbitrary text echoed into a cmd batch; escape the cmd
+                # metacharacters that would otherwise split the line (e.g.
+                # "& .NET Standard"). Caret first so we don't double-escape the
+                # carets we add.
+                for ch in "^&<>|()":
+                    title = title.replace(ch, "^" + ch)
             self._queue_console_cmd(run_id, blank)
-            self._queue_console_cmd(run_id, f"echo ===== {test['title']} =====")
+            self._queue_console_cmd(run_id, f"echo ===== {title} =====")
             self._queue_console_cmd(run_id, blank)
 
             test_passed = self._execute_test(
@@ -585,6 +655,7 @@ class TestExecutor:
                 wrapper_file = os.path.join(console_dir, "runcmd.bat")
                 with open(wrapper_file, "w", encoding="utf-8") as wf:
                     wf.write("@echo off\n")
+                    wf.write("set MSBUILDTERMINALLOGGER=on\n")
                     wf.write(f"cd /d {cwd}\n")
                     wf.write(f"echo {cwd}^> {cmd}\n")
                     # Use && and || to reliably capture success/failure
@@ -598,8 +669,9 @@ class TestExecutor:
                 with open(cmd_file, "a", encoding="utf-8") as f:
                     f.write(f"cd {cwd}\n")
                     f.write(f"echo '{cwd}$ {cmd}'\n")
+                    f.write("export MSBUILDTERMINALLOGGER=on\n")
                     f.write(f'{cmd} 2>&1 | tee "{stdout_file}"; echo $? > "{exitcode_file}"\n')
-                    f.write(f"echo\n")
+                    f.write("echo\n")
         except Exception:
             return self._run_direct(cmd, cwd, timeout, cancel_flag, run_id)
 
@@ -639,7 +711,7 @@ class TestExecutor:
             except OSError:
                 pass
 
-        return (stdout_text, "", exit_code)
+        return (_render_terminal_output(stdout_text), "", exit_code)
 
     def _run_direct(
         self, cmd: str, cwd: str, timeout: int,
@@ -656,6 +728,7 @@ class TestExecutor:
             env["DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION"] = "1"
             env["FORCE_COLOR"] = "1"
             env["TERM"] = "xterm-256color"
+            env["MSBUILDTERMINALLOGGER"] = "on"
 
             proc = subprocess.Popen(
                 cmd, shell=True, cwd=cwd,
@@ -693,7 +766,7 @@ class TestExecutor:
         except Exception as e:
             stderr_lines.append(str(e))
 
-        return ("".join(stdout_lines), "".join(stderr_lines), exit_code)
+        return (_render_terminal_output("".join(stdout_lines)), "".join(stderr_lines), exit_code)
 
     def _resolve_sdk_version(self, pinned: str = None) -> str:
         """Return the SDK version dotnet actually resolves for this run.
