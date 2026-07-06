@@ -1,16 +1,27 @@
 tests:
 - id: cs-04-web-mvc-webapi-build
   category: C# Web
-  title: 4. Create C# web/mvc/webapi apps, build
-  description: Create C# web, MVC, and WebAPI apps and build them without starting
-    servers
+  title: 4. Create C# web/mvc/webapi apps, run and verify site
+  description: Create C# web, MVC, and WebAPI apps, start each server and verify the
+    hosted site responds
   steps:
+  - type: command
+    command: dotnet dev-certs https --trust
   - type: command
     command: dotnet new web -o myweb
   - type: command
     command: cd myweb
   - type: command
     command: dotnet build
+  - type: command
+    command: dotnet run --launch-profile https --urls https://localhost:7101
+    long_running: true
+    ready_pattern:
+    - Now listening on
+    - Application started
+    verify_url: https://localhost:7101
+    verify_contains: Hello World
+    timeout: 300
   - type: command
     command: cd ..
   - type: command
@@ -20,7 +31,13 @@ tests:
   - type: command
     command: dotnet build
   - type: command
-    command: dotnet restore
+    command: dotnet run --launch-profile https --urls https://localhost:7102
+    long_running: true
+    ready_pattern:
+    - Now listening on
+    - Application started
+    verify_url: https://localhost:7102
+    timeout: 300
   - type: command
     command: cd ..
   - type: command
@@ -29,4 +46,12 @@ tests:
     command: cd mywebapi
   - type: command
     command: dotnet build
+  - type: command
+    command: dotnet run --launch-profile https --urls https://localhost:7103
+    long_running: true
+    ready_pattern:
+    - Now listening on
+    - Application started
+    verify_url: https://localhost:7103/weatherforecast
+    timeout: 300
   sort_order: 4

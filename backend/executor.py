@@ -7,6 +7,9 @@ import tempfile
 import threading
 import time
 import sqlite3
+import ssl
+import urllib.request
+import webbrowser
 from datetime import datetime
 from queue import Queue, Empty
 from typing import Dict, List, Any, Generator
@@ -448,6 +451,46 @@ class TestExecutor:
                     self._queue_console_cmd(run_id, cd_cmd)
                     continue
 
+                # Long-running server step (e.g. `dotnet run`): stream output, wait
+                # for readiness, optionally verify the hosted site, then terminate.
+                if step.get("long_running"):
+                    start_time = time.time()
+                    self._emit_event(run_id, {
+                        "type": "step_output",
+                        "result_id": result_id,
+                        "step_index": idx,
+                        "line": f"$ {cmd}",
+                        "is_command": True,
+                    })
+                    stdout_text, exit_code = self._run_long_running(
+                        run_id, result_id, idx, cmd, current_dir, step, cancel_flag, timeout
+                    )
+                    if cancel_flag.is_set():
+                        return False
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    step_passed = (exit_code == 0)
+                    status = "passed" if step_passed else "failed"
+                    if not step_passed:
+                        all_passed = False
+                    conn.execute(
+                        """INSERT INTO step_results (id, test_result_id, step_index, step_type, command, exit_code, stdout, stderr, status, duration_ms)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (step_id, result_id, idx, "command", cmd, exit_code,
+                         stdout_text[:10000], "", status, duration_ms),
+                    )
+                    conn.commit()
+                    self._emit_event(run_id, {
+                        "type": "step_end",
+                        "result_id": result_id,
+                        "step_index": idx,
+                        "status": status,
+                        "exit_code": exit_code,
+                        "duration_ms": duration_ms,
+                    })
+                    if not step_passed and not step.get("continue_on_error", False):
+                        break
+                    continue
+
                 # Execute the command
                 start_time = time.time()
 
@@ -712,6 +755,289 @@ class TestExecutor:
                 pass
 
         return (_render_terminal_output(stdout_text), "", exit_code)
+
+    def _run_long_running(
+        self, run_id: str, result_id: str, idx: int, cmd: str, cwd: str,
+        step: dict, cancel_flag: threading.Event, timeout: int
+    ) -> tuple:
+        """
+        Start a long-running server command, stream its output live to BOTH the app
+        panel and the popup console, wait for a readiness pattern, optionally
+        HTTP-verify the hosted site, then terminate. Returns (stdout_text, exit_code).
+
+        Python owns the process (clean PID kill). Each captured line is written to a
+        log file that the popup console tails live via a small PowerShell script, so
+        the console streams the same output as the panel in real time.
+        # ponytail: live tail is Windows-only; other platforms fall back to a single
+        # block dump after the step. Add a `tail -f`+sentinel loop if posix needs live.
+        """
+        ready_patterns = step.get("ready_pattern") or []
+        if isinstance(ready_patterns, str):
+            ready_patterns = [ready_patterns]
+        verify_url = step.get("verify_url")
+        contains = step.get("verify_contains")
+        if isinstance(contains, str):
+            contains = [contains]
+        # After a site is confirmed up, optionally open it in the browser and hold
+        # the server alive so it can be eyeballed (like the Notepad file preview).
+        open_in_browser = step.get("open_in_browser", True)
+        hold_seconds = step.get("hold_seconds", 10)
+
+        console_dir = self._console_procs.get(run_id)
+        console_dir = console_dir if isinstance(console_dir, str) else None
+        live = bool(console_dir) and sys.platform == "win32"
+
+        lines = []
+        ready = threading.Event()
+        log_fh = None
+        done_flag = None
+
+        if live:
+            srv_log = os.path.join(console_dir, f"srv_{idx}_{uuid.uuid4().hex[:8]}.log")
+            done_flag = srv_log + ".done"
+            for p in (srv_log, done_flag):
+                if os.path.exists(p):
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
+            try:
+                log_fh = open(srv_log, "a", encoding="utf-8")
+            except OSError:
+                log_fh = None
+            if log_fh:
+                tail_ps1 = self._write_tail_script(console_dir)
+                # ponytail: full path — the spawned console's PATH may lack System32,
+                # so bare `powershell` isn't found (same reason chcp uses a full path).
+                ps_exe = os.path.join(
+                    os.environ.get("SystemRoot", r"C:\Windows"),
+                    "System32", "WindowsPowerShell", "v1.0", "powershell.exe",
+                )
+                self._queue_console_cmd(
+                    run_id,
+                    f'"{ps_exe}" -NoProfile -ExecutionPolicy Bypass -File "{tail_ps1}" "{srv_log}" "{done_flag}"',
+                )
+
+        def write_log(text):
+            if log_fh:
+                try:
+                    log_fh.write(text)
+                    log_fh.flush()
+                except (OSError, ValueError):
+                    pass
+
+        write_log(f"\n{cwd}> {cmd}\n")
+
+        def finish(exit_code):
+            if log_fh:
+                try:
+                    log_fh.close()
+                except OSError:
+                    pass
+            if done_flag:
+                # Signals the console tailer to flush the rest and exit.
+                try:
+                    open(done_flag, "w").close()
+                except OSError:
+                    pass
+            elif console_dir:
+                # No live tail (posix): dump the whole block after the step.
+                self._console_show_output(run_id, f"{cwd}> {cmd}\n" + "".join(lines))
+            return (_render_terminal_output("".join(lines)), exit_code)
+
+        env = os.environ.copy()
+        env["DOTNET_CLI_COLORS"] = "1"
+        env["FORCE_COLOR"] = "1"
+
+        try:
+            proc = subprocess.Popen(
+                cmd, shell=True, cwd=cwd,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace", env=env,
+            )
+        except Exception as e:
+            lines.append(str(e))
+            write_log(str(e))
+            return finish(1)
+
+        def reader():
+            for line in proc.stdout:
+                lines.append(line)
+                write_log(line)
+                self._emit_event(run_id, {
+                    "type": "step_output",
+                    "result_id": result_id,
+                    "step_index": idx,
+                    "line": line.rstrip("\n"),
+                })
+                if not ready.is_set() and any(p in line for p in ready_patterns):
+                    ready.set()
+
+        t = threading.Thread(target=reader, daemon=True)
+        t.start()
+
+        # Wait for readiness, process exit, timeout, or cancel.
+        deadline = time.time() + timeout
+        while not ready.is_set() and proc.poll() is None:
+            if cancel_flag.is_set():
+                self._terminate_proc(proc)
+                t.join(timeout=2)
+                return finish(-1)
+            if time.time() > deadline:
+                self._terminate_proc(proc)
+                t.join(timeout=2)
+                msg = "\n[timeout waiting for readiness]\n"
+                lines.append(msg)
+                write_log(msg)
+                return finish(1)
+            time.sleep(0.2)
+
+        # Process died before becoming ready -> failure (build/run error).
+        if not ready.is_set():
+            t.join(timeout=2)
+            return finish(proc.returncode or 1)
+
+        exit_code = 0
+        if verify_url:
+            ok, status, body, err = self._verify_site(verify_url, contains)
+            msg = f"GET {verify_url} -> HTTP {status}" + (f" | {err}" if err else "")
+            self._emit_event(run_id, {
+                "type": "step_output",
+                "result_id": result_id,
+                "step_index": idx,
+                "line": ("✅ " if ok else "❌ ") + msg,
+            })
+            log_msg = "\n" + ("[OK] " if ok else "[FAIL] ") + msg + "\n"
+            lines.append(log_msg)
+            write_log(log_msg)
+            if not ok:
+                lines.append(body[:5000])
+                write_log(body[:5000])
+                exit_code = 1
+
+        # Open the live site for visual verification, keeping the server up for a
+        # short hold so it can be seen, then continue the automation.
+        if verify_url and open_in_browser:
+            try:
+                webbrowser.open(verify_url)
+            except Exception:
+                pass
+            hold_deadline = time.time() + hold_seconds
+            while time.time() < hold_deadline and not cancel_flag.is_set():
+                time.sleep(0.2)
+
+        self._terminate_proc(proc)
+        t.join(timeout=2)
+        return finish(exit_code)
+
+    def _write_tail_script(self, console_dir: str) -> str:
+        """Write (idempotently) a PowerShell script that live-tails a growing log
+        file to the console and exits once a done-flag file appears."""
+        path = os.path.join(console_dir, "tail.ps1")
+        script = (
+            'param([string]$Path, [string]$DoneFlag)\n'
+            '$pos = 0\n'
+            'while ($true) {\n'
+            '  if (Test-Path -LiteralPath $Path) {\n'
+            '    try { $c = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 -ErrorAction Stop } catch { $c = $null }\n'
+            '    if ($c -and $c.Length -gt $pos) { [Console]::Out.Write($c.Substring($pos)); $pos = $c.Length }\n'
+            '  }\n'
+            '  if (Test-Path -LiteralPath $DoneFlag) { break }\n'
+            '  Start-Sleep -Milliseconds 150\n'
+            '}\n'
+        )
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(script)
+        except OSError:
+            pass
+        return path
+
+    def _console_show_output(self, run_id: str, text: str):
+        """Dump arbitrary text into the popup console via a temp file + `type`.
+        # ponytail: `type`/`cat` a file instead of `echo` so server output with
+        # special chars (: / | & %) is shown verbatim, no shell-escaping needed.
+        """
+        console_dir = self._console_procs.get(run_id)
+        if not console_dir or not isinstance(console_dir, str):
+            return
+        try:
+            out_file = os.path.join(console_dir, f"srvout_{uuid.uuid4().hex[:8]}.txt")
+            with open(out_file, "w", encoding="utf-8") as f:
+                f.write(text)
+            if sys.platform == "win32":
+                self._queue_console_cmd(run_id, f'type "{out_file}"')
+                self._queue_console_cmd(run_id, "echo.")
+            else:
+                self._queue_console_cmd(run_id, f'cat "{out_file}"')
+                self._queue_console_cmd(run_id, "echo")
+        except Exception:
+            pass
+
+        """Dump arbitrary text into the popup console via a temp file + `type`.
+        # ponytail: `type`/`cat` a file instead of `echo` so server output with
+        # special chars (: / | & %) is shown verbatim, no shell-escaping needed.
+        """
+        console_dir = self._console_procs.get(run_id)
+        if not console_dir or not isinstance(console_dir, str):
+            return
+        try:
+            out_file = os.path.join(console_dir, f"srvout_{uuid.uuid4().hex[:8]}.txt")
+            with open(out_file, "w", encoding="utf-8") as f:
+                f.write(text)
+            if sys.platform == "win32":
+                self._queue_console_cmd(run_id, f'type "{out_file}"')
+                self._queue_console_cmd(run_id, "echo.")
+            else:
+                self._queue_console_cmd(run_id, f'cat "{out_file}"')
+                self._queue_console_cmd(run_id, "echo")
+        except Exception:
+            pass
+
+
+    def _verify_site(self, url: str, contains) -> tuple:
+        """One HTTP GET (a couple of tries). Returns (ok, status, body, err)."""
+        # ponytail: dev HTTPS cert is self-signed -> skip TLS verification.
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        last_err = ""
+        # ponytail: fixed 2 attempts, no backoff lib; server may need a beat
+        # after "Now listening on". Bump the range if that proves flaky.
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(url, timeout=10, context=ctx) as resp:
+                    status = getattr(resp, "status", resp.getcode())
+                    body = resp.read().decode("utf-8", "replace")
+                ok = 200 <= status < 300
+                missing = [s for s in (contains or []) if s not in body]
+                if ok and not missing:
+                    return (True, status, body, "")
+                err = f"missing {missing}" if missing else f"unexpected status {status}"
+                return (False, status, body, err)
+            except Exception as e:
+                last_err = str(e)
+                time.sleep(1)
+        return (False, 0, "", last_err)
+
+    def _terminate_proc(self, proc: subprocess.Popen):
+        """Kill the process and its children."""
+        try:
+            if sys.platform == "win32":
+                # ponytail: taskkill /T reaps the dotnet child that shell=True spawns;
+                # proc.terminate() alone leaves the server listening.
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            else:
+                proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
 
     def _run_direct(
         self, cmd: str, cwd: str, timeout: int,
