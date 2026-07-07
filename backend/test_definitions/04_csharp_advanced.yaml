@@ -35,61 +35,26 @@ tests:
 - id: cs-07-winforms-wpf-build
   category: C# Advanced
   title: 7. WinForms/WPF apps
-  description: Create WinForms and WPF apps, build and run them to verify the output windows (each window auto-closes after 10s)
+  description: Create WinForms and WPF apps, build and run them to verify the output windows (each window auto-closes after 5s)
   steps:
   - type: command
     command: dotnet new winforms -o w
   - type: command
     command: cd w
-  - type: write_file
-    path: Form1.cs
-    content: |
-      using System;
-      using System.Windows.Forms;
-
-      namespace w;
-
-      public partial class Form1 : Form
-      {
-          public Form1()
-          {
-              InitializeComponent();
-              var autoClose = new System.Windows.Forms.Timer { Interval = 10000 };
-              autoClose.Tick += (s, e) => { autoClose.Stop(); Close(); };
-              autoClose.Start();
-          }
-      }
   - type: command
     command: dotnet build
   - type: command
     command: dotnet run
+    run_timeout: 5
   - type: command
     command: cd ..
   - type: command
     command: dotnet new wpf -o mywpf
   - type: command
     command: cd mywpf
-  - type: write_file
-    path: MainWindow.xaml.cs
-    content: |
-      using System;
-      using System.Windows;
-      using System.Windows.Threading;
-
-      namespace mywpf;
-
-      public partial class MainWindow : Window
-      {
-          public MainWindow()
-          {
-              InitializeComponent();
-              var autoClose = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-              autoClose.Tick += (s, e) => { autoClose.Stop(); Close(); };
-              autoClose.Start();
-          }
-      }
   - type: command
     command: dotnet build
   - type: command
     command: dotnet run
+    run_timeout: 5
   sort_order: 9

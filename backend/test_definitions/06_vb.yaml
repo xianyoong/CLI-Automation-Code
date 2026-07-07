@@ -76,54 +76,26 @@ tests:
 - id: vb-13-winforms-wpf-build
   category: VB
   title: 13. VB WinForms/WPF
-  description: Create VB WPF and WinForms apps, build and run them to verify the output windows (each window auto-closes after 10s)
+  description: Create VB WPF and WinForms apps, build and run them to verify the output windows (each window auto-closes after 5s)
   steps:
   - type: command
     command: dotnet new wpf -o mywpf1 -lang vb
   - type: command
     command: cd mywpf1
-  - type: write_file
-    path: MainWindow.xaml.vb
-    content: |
-      Imports System.Windows.Threading
-
-      Class MainWindow
-          Public Sub New()
-              InitializeComponent()
-              Dim autoClose As New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(10)}
-              AddHandler autoClose.Tick, Sub(s, e)
-                                             autoClose.Stop()
-                                             Me.Close()
-                                         End Sub
-              autoClose.Start()
-          End Sub
-      End Class
   - type: command
     command: dotnet build
   - type: command
     command: dotnet run
+    run_timeout: 5
   - type: command
     command: cd ..
   - type: command
     command: dotnet new winforms -o w1 -lang vb
   - type: command
     command: cd w1
-  - type: write_file
-    path: Form1.vb
-    content: |
-      Public Class Form1
-          Public Sub New()
-              InitializeComponent()
-              Dim autoClose As New System.Windows.Forms.Timer With {.Interval = 10000}
-              AddHandler autoClose.Tick, Sub(s, e)
-                                             autoClose.Stop()
-                                             Me.Close()
-                                         End Sub
-              autoClose.Start()
-          End Sub
-      End Class
   - type: command
     command: dotnet build
   - type: command
     command: dotnet run
+    run_timeout: 5
   sort_order: 15
