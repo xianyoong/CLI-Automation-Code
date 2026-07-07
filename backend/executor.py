@@ -996,27 +996,6 @@ class TestExecutor:
         except Exception:
             pass
 
-        """Dump arbitrary text into the popup console via a temp file + `type`.
-        # ponytail: `type`/`cat` a file instead of `echo` so server output with
-        # special chars (: / | & %) is shown verbatim, no shell-escaping needed.
-        """
-        console_dir = self._console_procs.get(run_id)
-        if not console_dir or not isinstance(console_dir, str):
-            return
-        try:
-            out_file = os.path.join(console_dir, f"srvout_{uuid.uuid4().hex[:8]}.txt")
-            with open(out_file, "w", encoding="utf-8") as f:
-                f.write(text)
-            if sys.platform == "win32":
-                self._queue_console_cmd(run_id, f'type "{out_file}"')
-                self._queue_console_cmd(run_id, "echo.")
-            else:
-                self._queue_console_cmd(run_id, f'cat "{out_file}"')
-                self._queue_console_cmd(run_id, "echo")
-        except Exception:
-            pass
-
-
     def _verify_site(self, url: str, contains) -> tuple:
         """One HTTP GET (a couple of tries). Returns (ok, status, body, err)."""
         # ponytail: dev HTTPS cert is self-signed -> skip TLS verification.
