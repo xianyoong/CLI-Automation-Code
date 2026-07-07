@@ -403,6 +403,9 @@ class TestExecutor:
 
         # Pin SDK version via global.json if specified
         sdk_version = self._runs.get(run_id, {}).get("sdk_version") or None
+        # {tfm} in step commands/content tracks the selected SDK's target framework
+        # moniker (e.g. 11.0.100 -> net11.0). net48 and other literals are untouched.
+        tfm = f"net{sdk_version.split('.')[0]}.0" if sdk_version else "net10.0"
         if sdk_version:
             global_json = os.path.join(work_dir, "global.json")
             with open(global_json, "w") as f:
@@ -418,7 +421,7 @@ class TestExecutor:
             expected_exit = step.get("expected_exit_code", 0)
 
             if step_type == "command":
-                cmd = step["command"]
+                cmd = step["command"].replace("{tfm}", tfm)
                 # Handle cd commands by updating current_dir
                 if cmd.strip().startswith("cd "):
                     prev_dir = current_dir
@@ -573,20 +576,21 @@ class TestExecutor:
             elif step_type == "write_file":
                 filepath = os.path.join(current_dir, step["path"])
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                content = step["content"].replace("{tfm}", tfm)
 
                 start_time = time.time()
                 wrote_via_notepad = False
 
                 if sys.platform == "win32":
                     try:
-                        wrote_via_notepad = self._write_file_via_notepad(filepath, step["content"])
+                        wrote_via_notepad = self._write_file_via_notepad(filepath, content)
                     except Exception:
                         wrote_via_notepad = False
 
                 if not wrote_via_notepad:
                     # Fallback to direct write
                     with open(filepath, "w", encoding="utf-8") as f:
-                        f.write(step["content"])
+                        f.write(content)
 
                 duration_ms = int((time.time() - start_time) * 1000)
                 method_label = "via Notepad" if wrote_via_notepad else "direct"
@@ -595,7 +599,7 @@ class TestExecutor:
                     """INSERT INTO step_results (id, test_result_id, step_index, step_type, command, exit_code, stdout, status, duration_ms)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (step_id, result_id, idx, "write_file", step["path"], 0,
-                     f"Wrote {len(step['content'])} bytes ({method_label})", "passed", duration_ms),
+                     f"Wrote {len(content)} bytes ({method_label})", "passed", duration_ms),
                 )
                 conn.commit()
 

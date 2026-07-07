@@ -2,7 +2,7 @@ tests:
 - id: publish-15-framework-dependent
   category: Publish
   title: 15. Framework-dependent publish
-  description: Create a console app, build it, run it, and publish it for net10.0
+  description: Create a console app, build it, run it, and publish it for the selected .NET SDK
   steps:
   - type: command
     command: dotnet new console -o f3
@@ -13,7 +13,7 @@ tests:
   - type: command
     command: dotnet run
   - type: command
-    command: dotnet publish -f net10.0
+    command: dotnet publish -f {tfm}
   sort_order: 16
 - id: publish-16-self-contained
   category: Publish
