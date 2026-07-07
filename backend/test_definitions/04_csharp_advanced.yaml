@@ -35,7 +35,7 @@ tests:
 - id: cs-07-winforms-wpf-build
   category: C# Advanced
   title: 7. WinForms/WPF apps
-  description: Create WinForms and WPF apps and build them without running them
+  description: Create WinForms and WPF apps, build and run them to verify the output windows
   steps:
   - type: command
     command: dotnet new winforms -o w
@@ -44,6 +44,8 @@ tests:
   - type: command
     command: dotnet build
   - type: command
+    command: dotnet run
+  - type: command
     command: cd ..
   - type: command
     command: dotnet new wpf -o mywpf
@@ -51,4 +53,6 @@ tests:
     command: cd mywpf
   - type: command
     command: dotnet build
+  - type: command
+    command: dotnet run
   sort_order: 9

@@ -76,7 +76,7 @@ tests:
 - id: vb-13-winforms-wpf-build
   category: VB
   title: 13. VB WinForms/WPF
-  description: Create VB WPF and WinForms apps and build them
+  description: Create VB WPF and WinForms apps, build and run them to verify the output windows
   steps:
   - type: command
     command: dotnet new wpf -o mywpf1 -lang vb
@@ -85,6 +85,8 @@ tests:
   - type: command
     command: dotnet build
   - type: command
+    command: dotnet run
+  - type: command
     command: cd ..
   - type: command
     command: dotnet new winforms -o w1 -lang vb
@@ -92,4 +94,6 @@ tests:
     command: cd w1
   - type: command
     command: dotnet build
+  - type: command
+    command: dotnet run
   sort_order: 15
