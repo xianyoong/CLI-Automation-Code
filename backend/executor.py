@@ -456,7 +456,9 @@ class TestExecutor:
 
                 # Long-running server step (e.g. `dotnet run`): stream output, wait
                 # for readiness, optionally verify the hosted site, then terminate.
-                if step.get("long_running"):
+                # `run_timeout` reuses the same path for blocking GUI apps (WinForms/
+                # WPF): run for N seconds so the window shows, then auto-close it.
+                if step.get("long_running") or step.get("run_timeout"):
                     start_time = time.time()
                     self._emit_event(run_id, {
                         "type": "step_output",
@@ -880,6 +882,26 @@ class TestExecutor:
         t = threading.Thread(target=reader, daemon=True)
         t.start()
 
+        # Timed run for blocking GUI apps (WinForms/WPF): no readiness pattern —
+        # let the window render for `run_timeout` seconds, then auto-close it and
+        # pass. An early exit means the app quit on its own: use its exit code so
+        # a build/runtime failure (nonzero) is still reported as a failure.
+        run_timeout = step.get("run_timeout")
+        if run_timeout:
+            deadline = time.time() + run_timeout
+            while time.time() < deadline:
+                if cancel_flag.is_set():
+                    self._terminate_proc(proc)
+                    t.join(timeout=2)
+                    return finish(-1)
+                if proc.poll() is not None:
+                    t.join(timeout=2)
+                    return finish(proc.returncode or 0)
+                time.sleep(0.2)
+            self._terminate_proc(proc)
+            t.join(timeout=2)
+            return finish(0)
+
         # Wait for readiness, process exit, timeout, or cancel.
         deadline = time.time() + timeout
         while not ready.is_set() and proc.poll() is None:
@@ -977,27 +999,6 @@ class TestExecutor:
                 self._queue_console_cmd(run_id, "echo")
         except Exception:
             pass
-
-        """Dump arbitrary text into the popup console via a temp file + `type`.
-        # ponytail: `type`/`cat` a file instead of `echo` so server output with
-        # special chars (: / | & %) is shown verbatim, no shell-escaping needed.
-        """
-        console_dir = self._console_procs.get(run_id)
-        if not console_dir or not isinstance(console_dir, str):
-            return
-        try:
-            out_file = os.path.join(console_dir, f"srvout_{uuid.uuid4().hex[:8]}.txt")
-            with open(out_file, "w", encoding="utf-8") as f:
-                f.write(text)
-            if sys.platform == "win32":
-                self._queue_console_cmd(run_id, f'type "{out_file}"')
-                self._queue_console_cmd(run_id, "echo.")
-            else:
-                self._queue_console_cmd(run_id, f'cat "{out_file}"')
-                self._queue_console_cmd(run_id, "echo")
-        except Exception:
-            pass
-
 
     def _verify_site(self, url: str, contains) -> tuple:
         """One HTTP GET (a couple of tries). Returns (ok, status, body, err)."""
