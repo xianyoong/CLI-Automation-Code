@@ -24,7 +24,7 @@ def _render_terminal_output(text: str) -> str:
     file those frames just pile up, so we replay them through a VT emulator and
     read back the final screen.
 
-    ponytail: only kicks in when cursor-control escapes are present (the
+    only kicks in when cursor-control escapes are present (the
     telltale `\\x1b[?25` show/hide-cursor codes the logger always emits), so
     plain command output passes through untouched and never gets reflowed or
     truncated to the emulator width.
@@ -64,7 +64,7 @@ def _render_terminal_output(text: str) -> str:
         return out.rstrip()
 
     screen = pyte.HistoryScreen(200, 50, history=5000)
-    # ponytail: Windows consoles treat LF as CR+LF (move to column 0); pyte
+    # Windows consoles treat LF as CR+LF (move to column 0); pyte
     # defaults to Unix bare LF, which mangles cursor-repositioned output. LNM
     # matches the real console the app is imitating.
     screen.set_mode(pyte.modes.LNM)
@@ -143,7 +143,7 @@ class TestExecutor:
                 exec_file = os.path.join(console_dir, "exec.bat")
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write("@echo off\n")
-                    f.write("%SystemRoot%\\System32\\chcp.com 65001 >nul\n")  # ponytail: full path; PATH may lack System32 in the spawned console
+                    f.write("%SystemRoot%\\System32\\chcp.com 65001 >nul\n")  # full path; PATH may lack System32 in the spawned console
                     f.write(f"title .NET Test Runner - Run {run_id}\n")
                     f.write("echo ========================================\n")
                     f.write("echo   .NET SDK Test Runner - Live Console\n")
@@ -774,7 +774,7 @@ class TestExecutor:
         Python owns the process (clean PID kill). Each captured line is written to a
         log file that the popup console tails live via a small PowerShell script, so
         the console streams the same output as the panel in real time.
-        # ponytail: live tail is Windows-only; other platforms fall back to a single
+        # live tail is Windows-only; other platforms fall back to a single
         # block dump after the step. Add a `tail -f`+sentinel loop if posix needs live.
         """
         ready_patterns = step.get("ready_pattern") or []
@@ -813,7 +813,7 @@ class TestExecutor:
                 log_fh = None
             if log_fh:
                 tail_ps1 = self._write_tail_script(console_dir)
-                # ponytail: full path — the spawned console's PATH may lack System32,
+                # full path — the spawned console's PATH may lack System32,
                 # so bare `powershell` isn't found (same reason chcp uses a full path).
                 ps_exe = os.path.join(
                     os.environ.get("SystemRoot", r"C:\Windows"),
@@ -981,7 +981,7 @@ class TestExecutor:
 
     def _console_show_output(self, run_id: str, text: str):
         """Dump arbitrary text into the popup console via a temp file + `type`.
-        # ponytail: `type`/`cat` a file instead of `echo` so server output with
+        # `type`/`cat` a file instead of `echo` so server output with
         # special chars (: / | & %) is shown verbatim, no shell-escaping needed.
         """
         console_dir = self._console_procs.get(run_id)
@@ -1002,12 +1002,12 @@ class TestExecutor:
 
     def _verify_site(self, url: str, contains) -> tuple:
         """One HTTP GET (a couple of tries). Returns (ok, status, body, err)."""
-        # ponytail: dev HTTPS cert is self-signed -> skip TLS verification.
+        # dev HTTPS cert is self-signed -> skip TLS verification.
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         last_err = ""
-        # ponytail: fixed 2 attempts, no backoff lib; server may need a beat
+        # fixed 2 attempts, no backoff lib; server may need a beat
         # after "Now listening on". Bump the range if that proves flaky.
         for attempt in range(2):
             try:
@@ -1029,7 +1029,7 @@ class TestExecutor:
         """Kill the process and its children."""
         try:
             if sys.platform == "win32":
-                # ponytail: taskkill /T reaps the dotnet child that shell=True spawns;
+                # taskkill /T reaps the dotnet child that shell=True spawns;
                 # proc.terminate() alone leaves the server listening.
                 subprocess.run(
                     ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
@@ -1123,7 +1123,7 @@ class TestExecutor:
         try:
             with open(os.path.join(d, "global.json"), "w") as f:
                 json.dump({"sdk": {"version": pinned, "rollForward": "disable"}}, f)
-            # ponytail: unpinned fallback = version that actually runs when pinned is gone
+            # unpinned fallback = version that actually runs when pinned is gone
             return dotnet_version(d) or dotnet_version(None)
         finally:
             try:
