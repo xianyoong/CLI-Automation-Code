@@ -30,7 +30,11 @@ tests:
   - type: command
     command: dotnet run
   - type: command
-    command: dotnet publish -r win-x64 --sc
+    command: dotnet publish -r win-x64 --sc -o pub
   - type: command
-    command: dotnet publish -r win-arm64 --sc
+    command: cd pub
+  - type: command
+    command: dotnet f4.dll
+  - type: command
+    command: f4.exe
   sort_order: 17

@@ -35,7 +35,7 @@ tests:
 - id: cs-07-winforms-wpf-build
   category: C# Advanced
   title: 7. WinForms/WPF apps
-  description: Create WinForms and WPF apps, build and run them to verify the output windows (each window auto-closes after 5s)
+  description: Create WinForms and WPF apps, build and run them to verify the output windows (each window auto-closes after 10s)
   steps:
   - type: command
     command: dotnet new winforms -o w
@@ -45,7 +45,7 @@ tests:
     command: dotnet build
   - type: command
     command: dotnet run
-    run_timeout: 5
+    run_timeout: 10
   - type: command
     command: cd ..
   - type: command
@@ -56,5 +56,5 @@ tests:
     command: dotnet build
   - type: command
     command: dotnet run
-    run_timeout: 5
+    run_timeout: 10
   sort_order: 9
