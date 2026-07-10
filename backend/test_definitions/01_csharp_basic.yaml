@@ -23,7 +23,17 @@ tests:
     assert_output_contains:
     - Hello, World!
   - type: command
-    command: dotnet publish
+    command: dotnet publish -o pub
+  - type: command
+    command: cd pub
+  - type: command
+    command: dotnet c1.dll
+    assert_output_contains:
+    - Hello, World!
+  - type: command
+    command: c1.exe
+    assert_output_contains:
+    - Hello, World!
   sort_order: 2
 - id: cs-03-solution-class-libraries
   category: C# Basic
