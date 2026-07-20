@@ -38,6 +38,7 @@ export default function TestRunner({ status, testStatuses, tests, onCancel, onTe
                 {s === 'pending' && '○'}
                 {s === 'running' && '◉'}
                 {s === 'passed' && '✓'}
+                {s === 'passed_with_warnings' && '⚠'}
                 {s === 'failed' && '✗'}
                 {s === 'cancelled' && '—'}
               </span>

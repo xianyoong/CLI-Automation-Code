@@ -20,6 +20,15 @@ To force browser/web mode, set the environment variable `APP_MODE=web` before la
 4. **Review results** with pass/fail/skip counts
 5. **Add custom tests** using the "+ Add Test" button
 
+### Test Outcomes
+
+Each test reports one of these outcomes:
+
+- **Passed** ✓ — all steps succeeded with no warnings
+- **Passed with warnings** ⚠ — all steps succeeded but the output contained an MSBuild/NuGet-style warning (e.g. `warning NU1903:` for a package with a known vulnerability). Counted separately from clean passes.
+- **Failed** ✗ — a step returned an unexpected exit code or failed an output assertion
+- **Skipped** — the test was cancelled before it ran
+
 ## Building from Source
 
 ### Prerequisites (build machine only)
