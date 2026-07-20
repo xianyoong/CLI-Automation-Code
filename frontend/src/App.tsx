@@ -122,7 +122,7 @@ export default function App() {
           break;
         case 'test_end':
           setTestStatuses(prev => ({ ...prev, [event.test_case_id as string]: event.status as string }));
-          setLogs(prev => [...prev, `  ${event.status === 'passed' ? '✅ PASSED' : '❌ FAILED'}`]);
+          setLogs(prev => [...prev, `  ${event.status === 'passed' ? '✅ PASSED' : event.status === 'passed_with_warnings' ? '⚠️ PASSED (warnings)' : '❌ FAILED'}`]);
           break;
         case 'run_end':
           setRunStatus('completed');
@@ -204,7 +204,7 @@ export default function App() {
           break;
         case 'test_end':
           setTestStatuses(prev => ({ ...prev, [event.test_case_id as string]: event.status as string }));
-          setLogs(prev => [...prev, `  ${event.status === 'passed' ? '✅ PASSED' : '❌ FAILED'}`]);
+          setLogs(prev => [...prev, `  ${event.status === 'passed' ? '✅ PASSED' : event.status === 'passed_with_warnings' ? '⚠️ PASSED (warnings)' : '❌ FAILED'}`]);
           break;
         case 'run_end':
           setRunStatus('completed');

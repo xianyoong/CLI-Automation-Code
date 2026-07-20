@@ -24,16 +24,20 @@ function SummaryBar({ summary }: { summary: string | null }) {
   if (!summary) return <span>-</span>;
   try {
     const data = JSON.parse(summary);
-    const total = data.passed + data.failed + data.skipped;
+    const warnings = data.warnings ?? 0;
+    const total = data.passed + data.failed + data.skipped + warnings;
     if (total === 0) return <span>-</span>;
-    const pct = Math.round((data.passed / total) * 100);
-    const color = pct === 100 ? '#28a745' : pct >= 50 ? '#ffc107' : '#dc3545';
+    // Warnings still count as passing tests for the completion percentage.
+    const okPct = Math.round(((data.passed + warnings) / total) * 100);
+    const color = data.failed > 0 || data.skipped > 0
+      ? (okPct >= 50 ? '#ffc107' : '#dc3545')
+      : (warnings > 0 ? '#ffca28' : '#28a745');
     return (
       <div className="summary-bar-container">
         <div className="summary-bar-track">
-          <div className="summary-bar-fill" style={{ width: `${pct}%`, background: color }} />
+          <div className="summary-bar-fill" style={{ width: `${okPct}%`, background: color }} />
         </div>
-        <span className="summary-bar-label">{pct}%</span>
+        <span className="summary-bar-label">{okPct}%</span>
       </div>
     );
   } catch {
@@ -58,7 +62,7 @@ export default function Dashboard({ runs, onViewRun, onRetryRun, isRunning }: Da
               if (run.summary) {
                 try {
                   const s = JSON.parse(run.summary);
-                  totalTests = String(s.passed + s.failed + s.skipped);
+                  totalTests = String(s.passed + s.failed + s.skipped + (s.warnings ?? 0));
                 } catch {}
               }
               return (

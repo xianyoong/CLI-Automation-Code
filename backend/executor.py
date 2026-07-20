@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import uuid
@@ -83,6 +84,20 @@ def _get_db_path():
 
 
 DB_PATH = _get_db_path()
+
+
+# Matches MSBuild/NuGet/Roslyn diagnostic warnings, e.g. "warning NU1903:",
+# "warning CS0168:", "warning MSB3277:", "warning NETSDK1138:". These indicate a
+# step succeeded but emitted a diagnostic worth surfacing (e.g. a package with a
+# known vulnerability), so the test is reported as "passed with warnings".
+_WARNING_RE = re.compile(r"\bwarning\s+[A-Za-z]{2,}[0-9]+\s*:", re.IGNORECASE)
+
+
+def _detect_warnings(text: str) -> bool:
+    """Return True if the output contains an MSBuild/NuGet-style warning line."""
+    if not text:
+        return False
+    return bool(_WARNING_RE.search(text))
 
 
 def get_db():
@@ -276,6 +291,7 @@ class TestExecutor:
         passed = 0
         failed = 0
         skipped = 0
+        warned = 0
 
         # Capture environment info
         env_info = self._capture_environment()
@@ -344,17 +360,21 @@ class TestExecutor:
             self._queue_console_cmd(run_id, f"echo ===== {title} =====")
             self._queue_console_cmd(run_id, blank)
 
-            test_passed = self._execute_test(
+            test_passed, test_warned = self._execute_test(
                 run_id, result_id, steps, cancel_flag, conn
             )
 
-            status = "passed" if test_passed else "failed"
             if cancel_flag.is_set():
                 status = "cancelled"
                 skipped += 1
+            elif test_passed and test_warned:
+                status = "passed_with_warnings"
+                warned += 1
             elif test_passed:
+                status = "passed"
                 passed += 1
             else:
+                status = "failed"
                 failed += 1
 
             conn.execute(
@@ -372,7 +392,7 @@ class TestExecutor:
 
         # Finalize run
         final_status = "completed" if not cancel_flag.is_set() else "cancelled"
-        summary = json.dumps({"passed": passed, "failed": failed, "skipped": skipped})
+        summary = json.dumps({"passed": passed, "failed": failed, "skipped": skipped, "warnings": warned})
         conn.execute(
             "UPDATE test_runs SET status=?, finished_at=?, summary=? WHERE id=?",
             (final_status, datetime.now().isoformat(), summary, run_id),
@@ -383,7 +403,7 @@ class TestExecutor:
         self._emit_event(run_id, {
             "type": "run_end",
             "status": final_status,
-            "summary": {"passed": passed, "failed": failed, "skipped": skipped},
+            "summary": {"passed": passed, "failed": failed, "skipped": skipped, "warnings": warned},
         })
         self._end_stream(run_id)
 
@@ -394,12 +414,18 @@ class TestExecutor:
     def _execute_test(
         self, run_id: str, result_id: str, steps: List[dict],
         cancel_flag: threading.Event, conn: sqlite3.Connection
-    ) -> bool:
-        """Execute all steps for a single test case. Returns True if all pass."""
+    ) -> tuple:
+        """Execute all steps for a single test case.
+
+        Returns (all_passed, had_warnings): all_passed is True if every step
+        passed; had_warnings is True if any passing step emitted an
+        MSBuild/NuGet-style warning (e.g. NU1903 vulnerability warning).
+        """
         # Create a temp working directory for this test
         work_dir = tempfile.mkdtemp(prefix="dotnet_test_")
         current_dir = work_dir
         all_passed = True
+        had_warnings = False
 
         # Pin SDK version via global.json if specified
         sdk_version = self._runs.get(run_id, {}).get("sdk_version") or None
@@ -413,7 +439,7 @@ class TestExecutor:
 
         for idx, step in enumerate(steps):
             if cancel_flag.is_set():
-                return False
+                return (False, had_warnings)
 
             step_id = str(uuid.uuid4())[:12]
             step_type = step.get("type", "command")
@@ -471,10 +497,13 @@ class TestExecutor:
                         run_id, result_id, idx, cmd, current_dir, step, cancel_flag, timeout
                     )
                     if cancel_flag.is_set():
-                        return False
+                        return (False, had_warnings)
                     duration_ms = int((time.time() - start_time) * 1000)
                     step_passed = (exit_code == 0)
-                    status = "passed" if step_passed else "failed"
+                    step_warned = step_passed and _detect_warnings(stdout_text)
+                    if step_warned:
+                        had_warnings = True
+                    status = "warning" if step_warned else ("passed" if step_passed else "failed")
                     if not step_passed:
                         all_passed = False
                     conn.execute(
@@ -514,7 +543,7 @@ class TestExecutor:
                 )
 
                 if cancel_flag.is_set():
-                    return False
+                    return (False, had_warnings)
 
                 # Emit captured output to the in-app runner
                 if stdout_text:
@@ -549,7 +578,10 @@ class TestExecutor:
                             step_passed = False
                             break
 
-                status = "passed" if step_passed else "failed"
+                step_warned = step_passed and _detect_warnings(stdout_text)
+                if step_warned:
+                    had_warnings = True
+                status = "warning" if step_warned else ("passed" if step_passed else "failed")
                 if not step_passed:
                     all_passed = False
 
@@ -612,7 +644,7 @@ class TestExecutor:
                     "line": f"📝 Wrote file ({method_label}): {step['path']}",
                 })
 
-        return all_passed
+        return (all_passed, had_warnings)
 
     def _write_file_via_notepad(self, filepath: str, content: str) -> bool:
         """

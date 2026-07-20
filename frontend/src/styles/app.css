@@ -9,6 +9,7 @@
   --success: #4caf50;
   --error: #f44336;
   --warning: #ff9800;
+  --warn-pass: #ffca28;
 }
 
 * {
@@ -333,6 +334,10 @@ body {
   color: var(--success);
 }
 
+.status-passed_with_warnings .status-icon {
+  color: var(--warn-pass);
+}
+
 .status-failed .status-icon {
   color: var(--error);
 }
@@ -439,6 +444,11 @@ body {
   border: 1px solid var(--error);
 }
 
+.card-warnings {
+  background: rgba(255, 202, 40, 0.15);
+  border: 1px solid var(--warn-pass);
+}
+
 .card-skipped {
   background: rgba(255, 152, 0, 0.15);
   border: 1px solid var(--warning);
@@ -463,6 +473,10 @@ body {
 
 .bar-failed {
   background: var(--error);
+}
+
+.bar-warnings {
+  background: var(--warn-pass);
 }
 
 .bar-skipped {
@@ -812,6 +826,10 @@ body {
   border-left: 3px solid #28a745;
 }
 
+.result-row.result-passed_with_warnings {
+  border-left: 3px solid #ffca28;
+}
+
 .result-row.result-failed {
   border-left: 3px solid #dc3545;
 }
@@ -902,6 +920,10 @@ body {
 
 .run-detail-test-sidebar .sidebar-item.status-passed .status-icon {
   color: #4caf50;
+}
+
+.run-detail-test-sidebar .sidebar-item.status-passed_with_warnings .status-icon {
+  color: #ffca28;
 }
 
 .run-detail-test-sidebar .sidebar-item.status-failed .status-icon {

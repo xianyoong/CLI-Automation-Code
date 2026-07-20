@@ -1,5 +1,5 @@
 interface Props {
-  summary: { passed: number; failed: number; skipped: number };
+  summary: { passed: number; failed: number; skipped: number; warnings?: number };
   logs: string[];
   testStatuses: Record<string, string>;
   tests: { id: string; title: string }[];
@@ -11,21 +11,22 @@ function stripAnsi(str: string): string {
 
 function generateMarkdown(summary: Props['summary'], logs: string[], testStatuses: Record<string, string>, tests: Props['tests']): string {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
-  const total = summary.passed + summary.failed + summary.skipped;
+  const warnings = summary.warnings ?? 0;
+  const total = summary.passed + summary.failed + summary.skipped + warnings;
 
   let md = `# .NET SDK Test Run Report\n\n`;
   md += `**Date:** ${now}\n\n`;
   md += `## Summary\n\n`;
-  md += `| Total | Passed | Failed | Skipped |\n`;
-  md += `|-------|--------|--------|--------|\n`;
-  md += `| ${total} | ✅ ${summary.passed} | ❌ ${summary.failed} | ⏭️ ${summary.skipped} |\n\n`;
+  md += `| Total | Passed | Warnings | Failed | Skipped |\n`;
+  md += `|-------|--------|----------|--------|--------|\n`;
+  md += `| ${total} | ✅ ${summary.passed} | ⚠️ ${warnings} | ❌ ${summary.failed} | ⏭️ ${summary.skipped} |\n\n`;
 
   md += `## Test Results\n\n`;
   md += `| # | Test | Status |\n`;
   md += `|---|------|--------|\n`;
   tests.forEach((test, i) => {
     const status = testStatuses[test.id] || 'pending';
-    const icon = status === 'passed' ? '✅' : status === 'failed' ? '❌' : status === 'cancelled' ? '⚠️' : '○';
+    const icon = status === 'passed' ? '✅' : status === 'passed_with_warnings' ? '⚠️' : status === 'failed' ? '❌' : status === 'cancelled' ? '⚠️' : '○';
     md += `| ${i + 1} | ${test.title} | ${icon} ${status} |\n`;
   });
 
@@ -71,7 +72,8 @@ function blobDownload(content: string, filename: string) {
 }
 
 export default function ResultsSummary({ summary, logs, testStatuses, tests }: Props) {
-  const total = summary.passed + summary.failed + summary.skipped;
+  const warnings = summary.warnings ?? 0;
+  const total = summary.passed + summary.failed + summary.skipped + warnings;
 
   const handleExport = async () => {
     const md = generateMarkdown(summary, logs, testStatuses, tests);
@@ -89,6 +91,10 @@ export default function ResultsSummary({ summary, logs, testStatuses, tests }: P
           <div className="card-value">{summary.passed}</div>
           <div className="card-label">Passed</div>
         </div>
+        <div className="card card-warnings">
+          <div className="card-value">{warnings}</div>
+          <div className="card-label">Warnings</div>
+        </div>
         <div className="card card-failed">
           <div className="card-value">{summary.failed}</div>
           <div className="card-label">Failed</div>
@@ -105,6 +111,7 @@ export default function ResultsSummary({ summary, logs, testStatuses, tests }: P
       {total > 0 && (
         <div className="progress-bar">
           <div className="bar-passed" style={{ width: `${(summary.passed / total) * 100}%` }} />
+          <div className="bar-warnings" style={{ width: `${(warnings / total) * 100}%` }} />
           <div className="bar-failed" style={{ width: `${(summary.failed / total) * 100}%` }} />
           <div className="bar-skipped" style={{ width: `${(summary.skipped / total) * 100}%` }} />
         </div>

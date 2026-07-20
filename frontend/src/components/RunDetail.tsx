@@ -23,6 +23,7 @@ interface RunDetailProps {
 function statusIcon(status: string) {
   switch (status) {
     case 'passed': return '✅';
+    case 'passed_with_warnings': return '⚠️';
     case 'failed': return '❌';
     case 'skipped': return '⏭️';
     case 'cancelled': return '🚫';
@@ -49,7 +50,7 @@ function stripAnsi(str: string): string {
 
 function generateMarkdown(run: TestRun, results: TestResult[], logs: string[]): string {
   const summary = run.summary ? JSON.parse(run.summary) : null;
-  const total = summary ? summary.passed + summary.failed + summary.skipped : results.length;
+  const total = summary ? summary.passed + summary.failed + summary.skipped + (summary.warnings ?? 0) : results.length;
 
   let md = `# .NET SDK Test Run Report\n\n`;
   md += `**Run ID:** ${run.id}\n`;
@@ -60,16 +61,16 @@ function generateMarkdown(run: TestRun, results: TestResult[], logs: string[]): 
 
   if (summary) {
     md += `## Summary\n\n`;
-    md += `| Total | Passed | Failed | Skipped |\n`;
-    md += `|-------|--------|--------|--------|\n`;
-    md += `| ${total} | ✅ ${summary.passed} | ❌ ${summary.failed} | ⏭️ ${summary.skipped} |\n\n`;
+    md += `| Total | Passed | Warnings | Failed | Skipped |\n`;
+    md += `|-------|--------|----------|--------|--------|\n`;
+    md += `| ${total} | ✅ ${summary.passed} | ⚠️ ${summary.warnings ?? 0} | ❌ ${summary.failed} | ⏭️ ${summary.skipped} |\n\n`;
   }
 
   md += `## Test Results\n\n`;
   md += `| # | Test | Category | Status |\n`;
   md += `|---|------|----------|--------|\n`;
   results.forEach((result, i) => {
-    const icon = result.status === 'passed' ? '✅' : result.status === 'failed' ? '❌' : result.status === 'cancelled' ? '⚠️' : '○';
+    const icon = result.status === 'passed' ? '✅' : result.status === 'passed_with_warnings' ? '⚠️' : result.status === 'failed' ? '❌' : result.status === 'cancelled' ? '⚠️' : '○';
     md += `| ${i + 1} | ${result.title} | ${result.category} | ${icon} ${result.status} |\n`;
   });
 
@@ -167,7 +168,7 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
           }
         }
 
-        reconstructedLogs.push(`  ${result.status === 'passed' ? '✅ PASSED' : '❌ FAILED'}`);
+        reconstructedLogs.push(`  ${result.status === 'passed' ? '✅ PASSED' : result.status === 'passed_with_warnings' ? '⚠️ PASSED (warnings)' : '❌ FAILED'}`);
       }
 
       const parsedSummary = run.summary ? JSON.parse(run.summary) : null;
@@ -234,7 +235,7 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
           if (step.stdout) reconstructedLogs.push(...step.stdout.split('\n').filter((l: string) => l));
           if (step.stderr) reconstructedLogs.push(...step.stderr.split('\n').filter((l: string) => l).map((l: string) => `[STDERR] ${l}`));
         }
-        reconstructedLogs.push(`  ${result.status === 'passed' ? '✅ PASSED' : '❌ FAILED'}`);
+        reconstructedLogs.push(`  ${result.status === 'passed' ? '✅ PASSED' : result.status === 'passed_with_warnings' ? '⚠️ PASSED (warnings)' : '❌ FAILED'}`);
       }
       logsToExport = reconstructedLogs;
     }
@@ -247,7 +248,7 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
     return logs.map((line) => ansiConverter.toHtml(line));
   }, [logs]);
 
-  const total = summary ? summary.passed + summary.failed + summary.skipped : results.length;
+  const total = summary ? summary.passed + summary.failed + summary.skipped + (summary.warnings ?? 0) : results.length;
 
   return (
     <div className="run-detail-view">
@@ -268,6 +269,10 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
             <div className="card-value">{summary.passed}</div>
             <div className="card-label">Passed</div>
           </div>
+          <div className="card card-warnings">
+            <div className="card-value">{summary.warnings ?? 0}</div>
+            <div className="card-label">Warnings</div>
+          </div>
           <div className="card card-failed">
             <div className="card-value">{summary.failed}</div>
             <div className="card-label">Failed</div>
@@ -286,6 +291,7 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
       {summary && total > 0 && (
         <div className="progress-bar">
           <div className="bar-passed" style={{ width: `${(summary.passed / total) * 100}%` }} />
+          <div className="bar-warnings" style={{ width: `${((summary.warnings ?? 0) / total) * 100}%` }} />
           <div className="bar-failed" style={{ width: `${(summary.failed / total) * 100}%` }} />
           <div className="bar-skipped" style={{ width: `${(summary.skipped / total) * 100}%` }} />
         </div>
@@ -345,6 +351,7 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
                 >
                   <span className="status-icon">
                     {result.status === 'passed' && '✓'}
+                    {result.status === 'passed_with_warnings' && '⚠'}
                     {result.status === 'failed' && '✗'}
                     {result.status === 'skipped' && '—'}
                     {result.status === 'cancelled' && '—'}
