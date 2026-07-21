@@ -113,11 +113,18 @@ class TestExecutor:
         self._cancel_flags: Dict[str, threading.Event] = {}
         self._console_procs: Dict[str, Any] = {}  # run_id -> console_dir path
 
-    def start_run(self, run_id: str, tests: List[dict], open_console: bool = True, sdk_version: str = None):
-        """Start executing tests in a background thread."""
+    def start_run(self, run_id: str, tests: List[dict], open_console: bool = True, sdk_version: str = None, sdk_path: str = None):
+        """Start executing tests in a background thread.
+
+        sdk_path, when provided, is the install root (folder containing dotnet.exe)
+        of a specific .NET SDK — e.g. a zip-extracted SDK. All dotnet commands for
+        the run are executed against that install (via DOTNET_ROOT + PATH), so
+        zip/file-based workload installs are exercised instead of the PATH default.
+        """
         cancel_flag = threading.Event()
         self._cancel_flags[run_id] = cancel_flag
-        self._runs[run_id] = {"status": "running", "tests": tests, "sdk_version": sdk_version}
+        sdk_path = (sdk_path or "").strip() or None
+        self._runs[run_id] = {"status": "running", "tests": tests, "sdk_version": sdk_version, "sdk_path": sdk_path}
         self._event_queues[run_id] = []
 
         # Open a separate console window if requested
@@ -126,8 +133,8 @@ class TestExecutor:
 
         conn = get_db()
         conn.execute(
-            "INSERT INTO test_runs (id, started_at, status, sdk_version) VALUES (?, ?, ?, ?)",
-            (run_id, datetime.now().isoformat(), "running", sdk_version),
+            "INSERT INTO test_runs (id, started_at, status, sdk_version, sdk_path) VALUES (?, ?, ?, ?, ?)",
+            (run_id, datetime.now().isoformat(), "running", sdk_version, sdk_path),
         )
         conn.commit()
         conn.close()
@@ -136,6 +143,41 @@ class TestExecutor:
             target=self._execute_run, args=(run_id, tests, cancel_flag), daemon=True
         )
         thread.start()
+
+    def _dotnet_root(self, run_id: str):
+        """Return the SDK install root in effect right now, or None.
+
+        A per-test override (set while a test with its own ``sdk_path`` runs)
+        takes precedence over the run-level folder.
+        """
+        run = self._runs.get(run_id, {}) or {}
+        if "_active_sdk_path" in run:
+            return run["_active_sdk_path"] or None
+        return run.get("sdk_path") or None
+
+    def _dotnet_exe(self, root: str) -> str:
+        name = "dotnet.exe" if sys.platform == "win32" else "dotnet"
+        return os.path.join(root, name)
+
+    def _valid_dotnet_root(self, root: str) -> bool:
+        return bool(root) and os.path.isfile(self._dotnet_exe(root))
+
+    def _sdk_env(self, run_id: str, base: dict = None) -> dict:
+        """Copy of the environment with dotnet pointed at the run's SDK install.
+
+        When the run pins an SDK folder, prepend it to PATH, set DOTNET_ROOT, and
+        disable multi-level lookup so only that install (its workload install type)
+        is used. Otherwise returns the environment unchanged.
+        """
+        env = dict(base) if base is not None else os.environ.copy()
+        root = self._dotnet_root(run_id)
+        if not root:
+            return env
+        sep = ";" if sys.platform == "win32" else ":"
+        env["DOTNET_ROOT"] = root
+        env["DOTNET_MULTILEVEL_LOOKUP"] = "0"
+        env["PATH"] = root + sep + env.get("PATH", "")
+        return env
 
     def _open_console(self, run_id: str):
         """Open a visible console/terminal window that executes commands."""
@@ -293,8 +335,24 @@ class TestExecutor:
         skipped = 0
         warned = 0
 
+        # Validate a pinned SDK folder (e.g. a zip-extracted install). If it is
+        # invalid, fall back to the PATH default and warn loudly so a "zip install"
+        # test isn't silently run against the wrong (exe-installed) SDK.
+        root = self._dotnet_root(run_id)
+        if root and not self._valid_dotnet_root(root):
+            warn = f"[warn] SDK folder not found or missing dotnet executable: {root}. Falling back to PATH dotnet."
+            self._runs[run_id]["sdk_path"] = None
+            self._emit_event(run_id, {"type": "step_output", "result_id": None, "step_index": -1, "line": warn})
+            self._queue_console_cmd(run_id, f"echo {warn}")
+            conn.execute("UPDATE test_runs SET sdk_path=NULL WHERE id=?", (run_id,))
+            conn.commit()
+        elif root:
+            msg = f"[info] Using pinned SDK install: {root}"
+            self._emit_event(run_id, {"type": "step_output", "result_id": None, "step_index": -1, "line": msg})
+            self._queue_console_cmd(run_id, f"echo {msg}")
+
         # Capture environment info
-        env_info = self._capture_environment()
+        env_info = self._capture_environment(run_id)
         conn.execute(
             "UPDATE test_runs SET environment_info=? WHERE id=?",
             (env_info, run_id),
@@ -303,19 +361,24 @@ class TestExecutor:
 
         # Record the SDK actually resolved by dotnet (a pinned version may be
         # gone from the machine and silently roll forward). Log what really runs.
-        pinned = self._runs.get(run_id, {}).get("sdk_version") or None
-        actual = self._resolve_sdk_version(pinned)
+        run_pinned = self._runs.get(run_id, {}).get("sdk_version") or None
+        actual = self._resolve_sdk_version(run_pinned, run_id)
         if actual:
             self._runs[run_id]["sdk_version"] = actual
             conn.execute(
                 "UPDATE test_runs SET sdk_version=? WHERE id=?", (actual, run_id)
             )
             conn.commit()
-            if pinned and actual != pinned:
+            if run_pinned and actual != run_pinned:
                 self._queue_console_cmd(
                     run_id,
-                    f"echo [warn] pinned SDK {pinned} not installed; running {actual}",
+                    f"echo [warn] pinned SDK {run_pinned} not installed; running {actual}",
                 )
+
+        # Run-level SDK context. Each test defaults to this, but a test may pin its
+        # own install folder (test["sdk_path"]) to override it for that test only.
+        run_level_root = self._runs[run_id].get("sdk_path") or None
+        run_level_version = self._runs[run_id].get("sdk_version") or None
 
         self._emit_event(run_id, {
             "type": "run_start",
@@ -359,6 +422,29 @@ class TestExecutor:
             self._queue_console_cmd(run_id, blank)
             self._queue_console_cmd(run_id, f"echo ===== {title} =====")
             self._queue_console_cmd(run_id, blank)
+
+            # Resolve this test's SDK context: a valid per-test folder overrides
+            # the run-level one for this test only; otherwise the run-level applies.
+            test_root = (test.get("sdk_path") or "").strip() or None
+            if test_root and not self._valid_dotnet_root(test_root):
+                self._emit_event(run_id, {
+                    "type": "step_output", "result_id": result_id, "step_index": -1,
+                    "line": f"[warn] Test SDK folder not found or missing dotnet: {test_root}. Using run default.",
+                })
+                self._queue_console_cmd(run_id, f"echo [warn] test SDK folder invalid: {test_root}; using run default")
+                test_root = None
+            if test_root and test_root != run_level_root:
+                self._runs[run_id]["_active_sdk_path"] = test_root
+                # Resolve the version from this test's install for tfm + global.json.
+                self._runs[run_id]["_active_sdk_version"] = self._resolve_sdk_version(run_pinned, run_id)
+                self._emit_event(run_id, {
+                    "type": "step_output", "result_id": result_id, "step_index": -1,
+                    "line": f"[info] Test pinned to SDK install: {test_root}",
+                })
+                self._queue_console_cmd(run_id, f"echo [info] test pinned to SDK install: {test_root}")
+            else:
+                self._runs[run_id]["_active_sdk_path"] = run_level_root
+                self._runs[run_id]["_active_sdk_version"] = run_level_version
 
             test_passed, test_warned = self._execute_test(
                 run_id, result_id, steps, cancel_flag, conn
@@ -427,8 +513,10 @@ class TestExecutor:
         all_passed = True
         had_warnings = False
 
-        # Pin SDK version via global.json if specified
-        sdk_version = self._runs.get(run_id, {}).get("sdk_version") or None
+        # Pin SDK version via global.json if specified. Uses this test's active
+        # SDK context (a per-test folder override, or the run-level default).
+        run = self._runs.get(run_id, {})
+        sdk_version = run.get("_active_sdk_version", run.get("sdk_version")) or None
         # {tfm} in step commands/content tracks the selected SDK's target framework
         # moniker (e.g. 11.0.100 -> net11.0). net48 and other literals are untouched.
         tfm = f"net{sdk_version.split('.')[0]}.0" if sdk_version else "net10.0"
@@ -730,6 +818,7 @@ class TestExecutor:
         # 3. Tee output to a file for the app to read
         # 4. Write exit code to a file
         cmd_file = os.path.join(console_dir, "commands.txt")
+        root = self._dotnet_root(run_id)
         try:
             if sys.platform == "win32":
                 # Write a dedicated wrapper batch that captures exit code reliably
@@ -737,6 +826,11 @@ class TestExecutor:
                 with open(wrapper_file, "w", encoding="utf-8") as wf:
                     wf.write("@echo off\n")
                     wf.write("set MSBUILDTERMINALLOGGER=on\n")
+                    if root:
+                        # Point dotnet at the pinned SDK install for this run.
+                        wf.write(f'set "DOTNET_ROOT={root}"\n')
+                        wf.write("set DOTNET_MULTILEVEL_LOOKUP=0\n")
+                        wf.write(f'set "PATH={root};%PATH%"\n')
                     wf.write(f"cd /d {cwd}\n")
                     wf.write(f"echo {cwd}^> {cmd}\n")
                     # Use && and || to reliably capture success/failure
@@ -751,6 +845,10 @@ class TestExecutor:
                     f.write(f"cd {cwd}\n")
                     f.write(f"echo '{cwd}$ {cmd}'\n")
                     f.write("export MSBUILDTERMINALLOGGER=on\n")
+                    if root:
+                        f.write(f'export DOTNET_ROOT="{root}"\n')
+                        f.write("export DOTNET_MULTILEVEL_LOOKUP=0\n")
+                        f.write(f'export PATH="{root}:$PATH"\n')
                     f.write(f'{cmd} 2>&1 | tee "{stdout_file}"; echo $? > "{exitcode_file}"\n')
                     f.write("echo\n")
         except Exception:
@@ -883,7 +981,7 @@ class TestExecutor:
                 self._console_show_output(run_id, f"{cwd}> {cmd}\n" + "".join(lines))
             return (_render_terminal_output("".join(lines)), exit_code)
 
-        env = os.environ.copy()
+        env = self._sdk_env(run_id)
         env["DOTNET_CLI_COLORS"] = "1"
         env["FORCE_COLOR"] = "1"
 
@@ -1086,7 +1184,7 @@ class TestExecutor:
         exit_code = -1
 
         try:
-            env = os.environ.copy()
+            env = self._sdk_env(run_id)
             env["DOTNET_CLI_COLORS"] = "1"
             env["DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION"] = "1"
             env["FORCE_COLOR"] = "1"
@@ -1131,18 +1229,23 @@ class TestExecutor:
 
         return (_render_terminal_output("".join(stdout_lines)), "".join(stderr_lines), exit_code)
 
-    def _resolve_sdk_version(self, pinned: str = None) -> str:
+    def _resolve_sdk_version(self, pinned: str = None, run_id: str = None) -> str:
         """Return the SDK version dotnet actually resolves for this run.
 
         Resolves using the same global.json the test steps use so history logs
         the version that really executes, not a stale pinned string. Falls back
         to the unpinned default when the pinned version is no longer installed.
+        When the run pins an SDK folder, the version is resolved from that install.
         """
+        root = self._dotnet_root(run_id) if run_id else None
+        dotnet = self._dotnet_exe(root) if root else "dotnet"
+        env = self._sdk_env(run_id) if run_id else None
+
         def dotnet_version(cwd):
             try:
                 r = subprocess.run(
-                    ["dotnet", "--version"], capture_output=True, text=True,
-                    timeout=30, cwd=cwd,
+                    [dotnet, "--version"], capture_output=True, text=True,
+                    timeout=30, cwd=cwd, env=env,
                 )
                 return r.stdout.strip() if r.returncode == 0 else None
             except Exception:
@@ -1164,10 +1267,13 @@ class TestExecutor:
             except OSError:
                 pass
 
-    def _capture_environment(self) -> str:
+    def _capture_environment(self, run_id: str = None) -> str:
+        root = self._dotnet_root(run_id) if run_id else None
+        dotnet = self._dotnet_exe(root) if root else "dotnet"
+        env = self._sdk_env(run_id) if run_id else None
         try:
             result = subprocess.run(
-                ["dotnet", "--info"], capture_output=True, text=True, timeout=30
+                [dotnet, "--info"], capture_output=True, text=True, timeout=30, env=env,
             )
             return result.stdout
         except Exception as e:

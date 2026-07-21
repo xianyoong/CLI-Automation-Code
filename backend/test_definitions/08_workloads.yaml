@@ -30,7 +30,7 @@ tests:
 - id: workloads-maui-zip-install
   category: Workloads
   title: MAUI Workload (zip install)
-  description: Repeat the MAUI workload lifecycle scenario as a separate test case
+  description: MAUI workload lifecycle against a zip-installed SDK. Pin the zip SDK's install folder via the "SDK folder" field before running so workloads use the file-based (zip) install type.
   machine_mutating: true
   steps:
   - type: command
@@ -58,7 +58,7 @@ tests:
 - id: workloads-wasm-tools-zip-install
   category: Workloads
   title: Wasm-tools Workload (zip install)
-  description: Install and uninstall the wasm-tools workload
+  description: Install and uninstall the wasm-tools workload against a zip-installed SDK. Pin the zip SDK's install folder via the "SDK folder" field before running.
   machine_mutating: true
   steps:
   - type: command

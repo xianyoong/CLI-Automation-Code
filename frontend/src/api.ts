@@ -8,6 +8,7 @@ export interface TestCase {
   steps: Step[];
   is_builtin: boolean;
   is_machine_mutating: boolean;
+  sdk_path?: string | null;
 }
 
 export interface Step {
@@ -29,6 +30,7 @@ export interface TestRun {
   environment_info: string;
   summary: string | null;
   sdk_version: string | null;
+  sdk_path: string | null;
 }
 
 export interface StreamEvent {
@@ -62,11 +64,11 @@ export async function deleteTest(id: string): Promise<void> {
   await fetch(`${API_BASE}/tests/${id}`, { method: 'DELETE' });
 }
 
-export async function startExecution(testIds: string[], sdkVersion?: string): Promise<{ run_id: string }> {
+export async function startExecution(testIds: string[], sdkVersion?: string, sdkPath?: string): Promise<{ run_id: string }> {
   const res = await fetch(`${API_BASE}/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ test_ids: testIds, sdk_version: sdkVersion || null }),
+    body: JSON.stringify({ test_ids: testIds, sdk_version: sdkVersion || null, sdk_path: sdkPath || null }),
   });
   return res.json();
 }
@@ -117,5 +119,17 @@ export interface SdkEntry {
 
 export async function fetchSdks(): Promise<{ sdks: SdkEntry[]; error?: string }> {
   const res = await fetch(`${API_BASE}/sdks`);
+  return res.json();
+}
+
+export interface PickFolderResult {
+  picked: boolean;
+  path?: string;
+  has_dotnet?: boolean;
+  reason?: string;
+}
+
+export async function pickFolder(): Promise<PickFolderResult> {
+  const res = await fetch(`${API_BASE}/pick-folder`, { method: 'POST' });
   return res.json();
 }

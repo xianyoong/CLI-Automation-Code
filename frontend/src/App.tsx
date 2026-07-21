@@ -177,6 +177,7 @@ export default function App() {
     }
 
     const sdkVersion = run.sdk_version || selectedSdk;
+    const sdkPathForRun = run.sdk_path || undefined;
 
     setLogs([]);
     setSummary(null);
@@ -185,7 +186,7 @@ export default function App() {
     setRunnerTests(tests.filter(t => availableIds.includes(t.id)));
     setView('running');
 
-    const { run_id } = await startExecution(availableIds, sdkVersion);
+    const { run_id } = await startExecution(availableIds, sdkVersion, sdkPathForRun);
     setRunId(run_id);
 
     streamExecution(run_id, (event: StreamEvent) => {

@@ -261,6 +261,7 @@ export default function RunDetail({ run, results, tests, onBack }: RunDetailProp
       <div className="run-detail-meta">
         <span>Started: {formatTime(run.started_at)}</span>
         {run.finished_at && <span>Finished: {formatTime(run.finished_at)}</span>}
+        {run.sdk_path && <span title="Pinned SDK install folder for this run">SDK folder: {run.sdk_path}</span>}
       </div>
 
       {summary && (
