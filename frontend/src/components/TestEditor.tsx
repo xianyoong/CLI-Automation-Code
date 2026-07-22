@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TestCase, Step, createTest, updateTest } from '../api'
+import { TestCase, Step, createTest, updateTest, pickFolder } from '../api'
 
 interface Props {
   test: TestCase | null;
@@ -12,6 +12,7 @@ export default function TestEditor({ test, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(test?.title || '');
   const [description, setDescription] = useState(test?.description || '');
   const [machineMutating, setMachineMutating] = useState(test?.is_machine_mutating || false);
+  const [sdkPath, setSdkPath] = useState(test?.sdk_path || '');
   const [stepsText, setStepsText] = useState(
     test ? JSON.stringify(test.steps, null, 2) : JSON.stringify([{ type: 'command', command: 'dotnet --info' }], null, 2)
   );
@@ -20,6 +21,16 @@ export default function TestEditor({ test, onSave, onCancel }: Props) {
 
   const toKebabCase = (s: string) =>
     s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const handleBrowseSdkFolder = async () => {
+    const res = await pickFolder();
+    if (res.picked && res.path) {
+      setSdkPath(res.path);
+      if (res.has_dotnet === false) {
+        alert('Selected folder does not contain a dotnet executable. Pick the SDK install root (the folder that contains dotnet.exe).');
+      }
+    }
+  };
 
   const handleSave = async () => {
     if (!category.trim()) {
@@ -40,7 +51,7 @@ export default function TestEditor({ test, onSave, onCancel }: Props) {
     }
 
     const id = test ? test.id : toKebabCase(title);
-    const payload = { id, category: category.trim(), title: title.trim(), description, steps, is_machine_mutating: machineMutating };
+    const payload = { id, category: category.trim(), title: title.trim(), description, steps, is_machine_mutating: machineMutating, sdk_path: sdkPath.trim() || null };
 
     try {
       if (test) {
@@ -79,6 +90,24 @@ export default function TestEditor({ test, onSave, onCancel }: Props) {
           <input type="checkbox" checked={machineMutating} onChange={e => setMachineMutating(e.target.checked)} />
           Machine-mutating (modifies global state like workloads)
         </label>
+      </div>
+
+      <div className="form-group">
+        <label>SDK folder (optional)</label>
+        <div className="sdk-folder-row">
+          <input
+            value={sdkPath}
+            onChange={e => setSdkPath(e.target.value)}
+            placeholder="e.g. C:\\dotnet-zip — folder containing dotnet.exe. Blank = default (PATH) SDK."
+          />
+          <button type="button" className="small-btn" onClick={handleBrowseSdkFolder}>📁 Browse</button>
+          {sdkPath && (
+            <button type="button" className="small-btn" onClick={() => setSdkPath('')} title="Clear — use default PATH SDK">✕</button>
+          )}
+        </div>
+        <small className="help-text">
+          Pins this test to a specific SDK install (e.g. a zip-extracted SDK). Leave blank to use the machine's default (PATH) SDK.
+        </small>
       </div>
 
       <div className="form-group">

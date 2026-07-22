@@ -109,6 +109,16 @@ body {
   cursor: not-allowed;
 }
 
+.sdk-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sdk-folder-row input {
+  flex: 1;
+}
+
 .header nav {
   display: flex;
   gap: 0.5rem;

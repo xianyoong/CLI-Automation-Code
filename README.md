@@ -12,6 +12,21 @@ A standalone application for automating .NET SDK test execution on Windows VMs. 
 
 To force browser/web mode, set the environment variable `APP_MODE=web` before launching. `APP_MODE=native` (the default) uses the native window.
 
+## Selecting a specific SDK install (e.g. zip vs. exe)
+
+By default, all `dotnet` commands run against the SDK on the machine's `PATH` (typically the `.exe`/installer SDK under `C:\Program Files\dotnet`). To exercise a **different SDK install** — for example a `.zip`-extracted SDK, which uses the file-based workload install type — pin an **SDK folder** on the individual test:
+
+1. Open the test in the editor and set the **SDK folder (optional)** field to the SDK install root — the folder that contains `dotnet.exe` (e.g. `C:\dotnet-zip`). Use **📁 Browse** to pick it, or set an `sdk_path` key in a YAML test definition.
+2. Run the test. Its commands execute against that install (`DOTNET_ROOT` is set, the folder is prepended to `PATH`, and multi-level lookup is disabled), so `dotnet --info` reports that folder as its **Base Path**.
+3. Leave the field blank to use the default `PATH` SDK.
+
+Precedence per test:
+
+1. A valid per-test `sdk_path` → that install.
+2. Otherwise the machine's `PATH` SDK.
+
+If a per-test folder is set but invalid (missing `dotnet`), the run logs a warning and falls back to the `PATH` SDK. This lets, say, the "zip install" workload tests target a zip SDK while the rest of the run uses the default.
+
 ## Usage
 
 1. **Select tests** from the left panel (grouped by category)

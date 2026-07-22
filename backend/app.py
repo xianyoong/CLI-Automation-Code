@@ -57,6 +57,7 @@ def init_db():
             is_builtin INTEGER DEFAULT 0,
             is_machine_mutating INTEGER DEFAULT 0,
             sort_order INTEGER DEFAULT 999,
+            sdk_path TEXT,
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
@@ -67,7 +68,8 @@ def init_db():
             status TEXT DEFAULT 'pending',
             environment_info TEXT,
             summary TEXT,
-            sdk_version TEXT
+            sdk_version TEXT,
+            sdk_path TEXT
         );
         CREATE TABLE IF NOT EXISTS test_results (
             id TEXT PRIMARY KEY,
@@ -97,6 +99,16 @@ def init_db():
     # Migrate: add sdk_version column if missing (for existing DBs)
     try:
         conn.execute("ALTER TABLE test_runs ADD COLUMN sdk_version TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    # Migrate: add sdk_path column (pinned SDK install folder, e.g. zip install)
+    try:
+        conn.execute("ALTER TABLE test_runs ADD COLUMN sdk_path TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    # Migrate: add per-test sdk_path column to test_cases
+    try:
+        conn.execute("ALTER TABLE test_cases ADD COLUMN sdk_path TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
     conn.commit()
@@ -131,8 +143,8 @@ def load_builtin_definitions():
             if test_id in existing:
                 continue
             conn.execute(
-                """INSERT INTO test_cases (id, category, title, description, steps, is_builtin, is_machine_mutating, sort_order)
-                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                """INSERT INTO test_cases (id, category, title, description, steps, is_builtin, is_machine_mutating, sort_order, sdk_path)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)""",
                 (
                     test_id,
                     test.get("category", "General"),
@@ -141,6 +153,7 @@ def load_builtin_definitions():
                     json.dumps(test["steps"]),
                     1 if test.get("machine_mutating", False) else 0,
                     test.get("sort_order", 999),
+                    (test.get("sdk_path") or None),
                 ),
             )
     conn.commit()
@@ -169,6 +182,7 @@ def list_tests():
             "is_builtin": bool(row["is_builtin"]),
             "is_machine_mutating": bool(row["is_machine_mutating"]),
             "sort_order": row["sort_order"],
+            "sdk_path": row["sdk_path"],
         })
     return jsonify(tests)
 
@@ -179,8 +193,8 @@ def create_test():
     test_id = data.get("id", str(uuid.uuid4())[:8])
     conn = get_db()
     conn.execute(
-        """INSERT INTO test_cases (id, category, title, description, steps, is_builtin, is_machine_mutating)
-           VALUES (?, ?, ?, ?, ?, 0, ?)""",
+        """INSERT INTO test_cases (id, category, title, description, steps, is_builtin, is_machine_mutating, sdk_path)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?)""",
         (
             test_id,
             data["category"],
@@ -188,6 +202,7 @@ def create_test():
             data.get("description", ""),
             json.dumps(data["steps"]),
             1 if data.get("is_machine_mutating", False) else 0,
+            (data.get("sdk_path") or "").strip() or None,
         ),
     )
     conn.commit()
@@ -201,7 +216,7 @@ def update_test(test_id):
     conn = get_db()
     conn.execute(
         """UPDATE test_cases SET category=?, title=?, description=?, steps=?,
-           is_machine_mutating=?, updated_at=datetime('now')
+           is_machine_mutating=?, sdk_path=?, updated_at=datetime('now')
            WHERE id=?""",
         (
             data["category"],
@@ -209,6 +224,7 @@ def update_test(test_id):
             data.get("description", ""),
             json.dumps(data["steps"]),
             1 if data.get("is_machine_mutating", False) else 0,
+            (data.get("sdk_path") or "").strip() or None,
             test_id,
         ),
     )
@@ -281,11 +297,12 @@ def start_execution():
     run_id = str(uuid.uuid4())[:12]
     open_console = data.get("open_console", True)
     sdk_version = data.get("sdk_version", None)
+    sdk_path = data.get("sdk_path", None)
     # Debug log to file (since exe has no console)
     import tempfile
     with open(os.path.join(tempfile.gettempdir(), "test_runner_debug.log"), "a") as dbg:
-        dbg.write(f"[Execute] run_id={run_id}, sdk_version={sdk_version}\n")
-    executor.start_run(run_id, [dict(t) for t in tests], open_console=open_console, sdk_version=sdk_version)
+        dbg.write(f"[Execute] run_id={run_id}, sdk_version={sdk_version}, sdk_path={sdk_path}\n")
+    executor.start_run(run_id, [dict(t) for t in tests], open_console=open_console, sdk_version=sdk_version, sdk_path=sdk_path)
     return jsonify({"run_id": run_id})
 
 
@@ -365,6 +382,36 @@ def list_sdks():
         return jsonify({"sdks": [], "error": "dotnet not found in PATH"})
     except Exception as e:
         return jsonify({"sdks": [], "error": str(e)})
+
+
+@app.route("/api/pick-folder", methods=["POST"])
+def pick_folder():
+    """Show a native folder-picker so the user can choose an SDK install folder.
+
+    Returns the chosen folder and whether it contains a dotnet executable, so the
+    UI can pin a specific SDK install (e.g. a zip-extracted SDK) for a run.
+    """
+    def has_dotnet(folder):
+        if not folder:
+            return False
+        exe = "dotnet.exe" if sys.platform == "win32" else "dotnet"
+        return os.path.isfile(os.path.join(folder, exe))
+
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        folder = filedialog.askdirectory(title="Select .NET SDK install folder (contains dotnet.exe)")
+        root.destroy()
+
+        if not folder:
+            return jsonify({"picked": False, "reason": "cancelled"})
+        folder = os.path.normpath(folder)
+        return jsonify({"picked": True, "path": folder, "has_dotnet": has_dotnet(folder)})
+    except Exception as e:
+        return jsonify({"picked": False, "reason": str(e)}), 500
 
 
 # --- Serve React SPA ---
